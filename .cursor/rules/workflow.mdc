@@ -1,0 +1,17 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Coding workflow preferences
+
+- Focus on the areas of code relevent to the task
+
+- Do not touch code that is unrelated to the task
+
+- write thorough test for all major functionality
+
+- avoid making major changes to the patterns and architecture of how features work, after it has shown to woirk well, unless
+explicitly structed
+
+- always think about what other methods and areas of code might be affect by code changes

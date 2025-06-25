@@ -1,0 +1,16 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Technical stack
+
+- Next.js 15 for  Backend and frontend
+- Tailwind Css for styling/frontend
+- Prisma/postgresssql for database handling
+- Seperate databases for dev, test, and prod
+- Use Nextauth for authentication
+- bcrypt for encrpting passwords or senstive data in the database
+- stripe for payment integration
+
+- framermotion for frontend animations
