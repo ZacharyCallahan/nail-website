@@ -3,12 +3,45 @@
 import { Button } from "@/app/components/ui/button";
 import { addDays } from "date-fns";
 import { Check, ChevronLeft, ChevronRight } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { BookingSummary } from "./BookingSummary";
 import { CustomerDetails } from "./CustomerDetails";
 import { DateTimeSelection } from "./DateTimeSelection";
 import { ServiceSelection } from "./ServiceSelection";
+
+// Client-only component for localStorage debug info
+function LocalStorageDebugInfoComponent() {
+    return (
+        <>
+            <p>Booking data in localStorage: {localStorage.getItem('bookingData') ? 'Yes' : 'No'}</p>
+            <p>Service in localStorage: {localStorage.getItem('selectedService') ? 'Yes' : 'No'}</p>
+            <div className="mt-2">
+                <button
+                    className="text-blue-500 underline"
+                    onClick={() => {
+                        try {
+                            const bookingDataFromStorage = JSON.parse(localStorage.getItem('bookingData') || '{}');
+                            alert(`Staff in localStorage: ${bookingDataFromStorage.staffMember ?
+                                JSON.stringify(bookingDataFromStorage.staffMember) : 'none'}`);
+                        } catch (e) {
+                            alert(`Error reading localStorage: ${e.message}`);
+                        }
+                    }}
+                >
+                    Check Staff in Storage
+                </button>
+            </div>
+        </>
+    );
+}
+
+// Dynamically import with SSR disabled
+const LocalStorageDebugInfo = dynamic(
+    () => Promise.resolve(LocalStorageDebugInfoComponent),
+    { ssr: false }
+);
 
 const steps = [
     { id: "service", title: "Select Service" },
@@ -954,28 +987,9 @@ export function BookingForm() {
                 <p>Selected time: {bookingData.time ? (bookingData.time.time ? new Date(bookingData.time.time).toLocaleTimeString() : 'invalid format') : 'none'}</p>
                 <p>Can proceed: {canProceed ? 'Yes' : 'No'}</p>
                 <p>Validation errors: {Object.keys(validationErrors).length > 0 ? JSON.stringify(validationErrors) : 'None'}</p>
-                {typeof window !== 'undefined' && (
-                    <>
-                        <p>Booking data in localStorage: {localStorage.getItem('bookingData') ? 'Yes' : 'No'}</p>
-                        <p>Service in localStorage: {localStorage.getItem('selectedService') ? 'Yes' : 'No'}</p>
-                        <div className="mt-2">
-                            <button
-                                className="text-blue-500 underline"
-                                onClick={() => {
-                                    try {
-                                        const bookingDataFromStorage = JSON.parse(localStorage.getItem('bookingData') || '{}');
-                                        alert(`Staff in localStorage: ${bookingDataFromStorage.staffMember ?
-                                            JSON.stringify(bookingDataFromStorage.staffMember) : 'none'}`);
-                                    } catch (e) {
-                                        alert(`Error reading localStorage: ${e.message}`);
-                                    }
-                                }}
-                            >
-                                Check Staff in Storage
-                            </button>
-                        </div>
-                    </>
-                )}
+
+                {/* Use client-only component for localStorage operations */}
+                <LocalStorageDebugInfo />
             </div>
         </div>
     );
