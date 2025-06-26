@@ -201,7 +201,7 @@ export default function ServicesPage() {
                             <div className="bg-card rounded-lg p-6 shadow-sm">
                                 <h3 className="text-xl font-semibold mb-3">Can I get a pedicure if I have a foot condition?</h3>
                                 <p className="text-muted-foreground">
-                                    It depends on the condition. For your safety, we may not be able to provide services if you have certain infections or open wounds. Please consult with your doctor before booking if you're concerned.
+                                    It depends on the condition. For your safety, we may not be able to provide services if you have certain infections or open wounds. Please consult with your doctor before booking if you&apos;re concerned.
                                 </p>
                             </div>
 

@@ -21,7 +21,7 @@ export default function BookingSuccessPage() {
 
                     <div className="bg-card border rounded-lg p-6 mb-8 text-left">
                         <p className="text-center text-muted-foreground mb-6">
-                            Thank you for booking with Elegant Nails. We've sent a confirmation email with all the details.
+                            Thank you for booking with Elegant Nails. We&apos;ve sent a confirmation email with all the details.
                         </p>
 
                         <div className="space-y-4">
