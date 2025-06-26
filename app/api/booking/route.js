@@ -1,6 +1,6 @@
 import { auth } from "@/app/api/auth/[...nextauth]/route";
 import prisma from "@/lib/prisma";
-import { stripe } from "@/lib/stripe";
+import { createCheckoutSession, stripe } from "@/lib/stripe";
 import { calculateEndTime } from "@/lib/utils";
 import { NextResponse } from "next/server";
 
@@ -8,167 +8,249 @@ import { NextResponse } from "next/server";
 export async function POST(request) {
     try {
         const session = await auth();
-        const data = await request.json();
 
-        // Validate required fields
-        if (!data.serviceId || !data.staffId || !data.startTime || !data.totalPrice) {
-            return NextResponse.json({ error: "Missing required booking information" }, { status: 400 });
+        // Get request body
+        const data = await request.json();
+        const {
+            serviceId,
+            staffId,
+            date,
+            time,
+            customer,
+            addons = []
+        } = data;
+
+        if (!serviceId || !staffId || !date || !time || !customer) {
+            return NextResponse.json(
+                { error: "Missing required booking information" },
+                { status: 400 }
+            );
         }
 
-        // Get the service to calculate end time
+        // Validate customer data
+        if (!customer.name || !customer.email || !customer.phone) {
+            return NextResponse.json(
+                { error: "Missing customer information" },
+                { status: 400 }
+            );
+        }
+
+        // Get the service details
         const service = await prisma.service.findUnique({
-            where: { id: data.serviceId }
+            where: { id: serviceId },
+            include: {
+                addons: {
+                    where: {
+                        id: {
+                            in: addons
+                        }
+                    }
+                }
+            }
         });
 
         if (!service) {
-            return NextResponse.json({ error: "Service not found" }, { status: 404 });
+            return NextResponse.json(
+                { error: "Service not found" },
+                { status: 404 }
+            );
         }
+
+        // Check staff exists and can perform this service
+        const staff = await prisma.staff.findFirst({
+            where: {
+                id: staffId,
+                isActive: true,
+                services: {
+                    some: {
+                        id: serviceId
+                    }
+                }
+            }
+        });
+
+        if (!staff) {
+            return NextResponse.json(
+                { error: "Staff member not found or cannot perform this service" },
+                { status: 404 }
+            );
+        }
+
+        // Convert date and time to Date objects
+        const dateObj = new Date(date);
+        const [hours, minutes] = time.split(':').map(Number);
+
+        dateObj.setHours(hours, minutes, 0, 0);
 
         // Calculate end time based on service duration
-        const startTime = new Date(data.startTime);
-        const endTime = calculateEndTime(startTime, service.duration);
+        const durationInMinutes = service.duration;
+        const endTimeObj = new Date(dateObj);
+        endTimeObj.setMinutes(dateObj.getMinutes() + durationInMinutes);
 
-        // Check if the customer already exists by email
-        let customerId = null;
+        // Check if the staff is available at this time
+        const dayOfWeek = dateObj.getDay(); // 0 = Sunday, 1 = Monday, etc.
 
-        if (session && session.user) {
-            // If user is logged in, use their ID
-            customerId = session.user.id;
-        } else if (data.customerEmail) {
-            // If not logged in, check if customer exists by email
-            const existingCustomer = await prisma.user.findUnique({
-                where: { email: data.customerEmail }
-            });
+        // Format date range for specific date check
+        const startOfDay = new Date(dateObj);
+        startOfDay.setHours(0, 0, 0, 0);
 
-            if (existingCustomer) {
-                customerId = existingCustomer.id;
-            } else {
-                // Create a new customer
-                const newCustomer = await prisma.user.create({
-                    data: {
-                        name: `${data.customerFirstName} ${data.customerLastName}`,
-                        email: data.customerEmail,
-                        phone: data.customerPhone,
-                        role: "CUSTOMER"
-                    }
-                });
+        const endOfDay = new Date(dateObj);
+        endOfDay.setHours(23, 59, 59, 999);
 
-                customerId = newCustomer.id;
+        // Check for specific date schedule first (it overrides weekly schedule)
+        const specificDateSchedule = await prisma.schedule.findFirst({
+            where: {
+                staffId,
+                specificDate: {
+                    gte: startOfDay,
+                    lte: endOfDay
+                }
             }
-        } else {
-            return NextResponse.json({ error: "Customer information required" }, { status: 400 });
+        });
+
+        // If no specific schedule, check weekly schedule
+        let schedule = specificDateSchedule;
+        if (!schedule) {
+            schedule = await prisma.schedule.findFirst({
+                where: {
+                    staffId,
+                    dayOfWeek,
+                    specificDate: null
+                }
+            });
         }
 
-        // Verify this time slot is available
+        if (!schedule || !schedule.isAvailable) {
+            return NextResponse.json(
+                { error: "Staff member is not available on this day" },
+                { status: 400 }
+            );
+        }
+
+        // Check if the requested time is within the staff's schedule
+        const scheduleStartTime = new Date(schedule.startTime);
+        const scheduleEndTime = new Date(schedule.endTime);
+
+        // Extract just the time part for comparison
+        const requestedTimeHours = dateObj.getHours();
+        const requestedTimeMinutes = dateObj.getMinutes();
+
+        const scheduleStartTimeHours = scheduleStartTime.getHours();
+        const scheduleStartTimeMinutes = scheduleStartTime.getMinutes();
+
+        const scheduleEndTimeHours = scheduleEndTime.getHours();
+        const scheduleEndTimeMinutes = scheduleEndTime.getMinutes();
+
+        // Convert to minutes for easier comparison
+        const requestedTimeInMinutes = requestedTimeHours * 60 + requestedTimeMinutes;
+        const scheduleStartInMinutes = scheduleStartTimeHours * 60 + scheduleStartTimeMinutes;
+        const scheduleEndInMinutes = scheduleEndTimeHours * 60 + scheduleEndTimeMinutes;
+
+        if (requestedTimeInMinutes < scheduleStartInMinutes ||
+            requestedTimeInMinutes + durationInMinutes > scheduleEndInMinutes) {
+            return NextResponse.json(
+                { error: "Requested time is outside of staff availability hours" },
+                { status: 400 }
+            );
+        }
+
+        // Check for any conflicting appointments
         const conflictingAppointment = await prisma.appointment.findFirst({
             where: {
-                staffId: data.staffId,
-                status: { notIn: ["CANCELED"] },
+                staffId,
+                status: {
+                    notIn: ['CANCELED']
+                },
                 OR: [
+                    // Appointment starts during our requested time slot
                     {
-                        startTime: { lte: startTime },
-                        endTime: { gt: startTime }
+                        startTime: {
+                            gte: dateObj,
+                            lt: endTimeObj
+                        }
                     },
+                    // Appointment ends during our requested time slot
                     {
-                        startTime: { lt: endTime },
-                        endTime: { gte: endTime }
+                        endTime: {
+                            gt: dateObj,
+                            lte: endTimeObj
+                        }
                     },
+                    // Appointment completely contains our requested time slot
                     {
-                        startTime: { gte: startTime },
-                        endTime: { lte: endTime }
+                        startTime: {
+                            lte: dateObj
+                        },
+                        endTime: {
+                            gte: endTimeObj
+                        }
                     }
                 ]
             }
         });
 
         if (conflictingAppointment) {
-            return NextResponse.json({
-                error: "This time slot is no longer available. Please select a different time."
-            }, { status: 409 });
+            return NextResponse.json(
+                { error: "This time slot is no longer available" },
+                { status: 400 }
+            );
         }
 
-        // Create the booking in a transaction
-        const appointment = await prisma.$transaction(async (tx) => {
-            // Create the appointment
-            const newAppointment = await tx.appointment.create({
-                data: {
-                    customerId,
-                    staffId: data.staffId,
-                    serviceId: data.serviceId,
-                    startTime,
-                    endTime,
-                    status: "PENDING",
-                    totalPrice: parseFloat(data.totalPrice),
-                    notes: data.notes || null
-                }
-            });
+        // Calculate total price
+        const addonTotal = service.addons.reduce((sum, addon) => sum + addon.price, 0);
+        const totalPrice = service.price + addonTotal;
 
-            // Add any add-ons
-            if (data.addOns && data.addOns.length > 0) {
-                const addOnConnections = data.addOns.map(addOnId => ({
-                    appointmentId: newAppointment.id,
-                    addOnId
-                }));
-
-                await tx.appointmentAddOn.createMany({
-                    data: addOnConnections
-                });
+        // Create the appointment in "pending" status
+        const appointment = await prisma.appointment.create({
+            data: {
+                serviceId,
+                staffId,
+                startTime: dateObj,
+                endTime: endTimeObj,
+                status: 'PENDING',
+                customerName: customer.name,
+                customerEmail: customer.email,
+                customerPhone: customer.phone,
+                notes: customer.notes || '',
+                totalPrice,
+                addons: {
+                    connect: service.addons.map(addon => ({ id: addon.id }))
+                },
+                // If the user is authenticated, link the appointment to their account
+                ...(session?.user ? {
+                    userId: session.user.id
+                } : {})
             }
-
-            // Create a pending payment record
-            await tx.payment.create({
-                data: {
-                    appointmentId: newAppointment.id,
-                    amount: parseFloat(data.totalPrice),
-                    status: "PENDING"
-                }
-            });
-
-            return newAppointment;
         });
 
         // Create a Stripe checkout session
-        const stripeDomain = process.env.NODE_ENV === 'production'
-            ? process.env.NEXT_PUBLIC_APP_URL
-            : 'http://localhost:3000';
-
-        // Create line items for the service and add-ons
-        const lineItems = [
-            {
-                price_data: {
-                    currency: 'usd',
-                    product_data: {
-                        name: service.name,
-                        description: `${service.duration} min appointment`
-                    },
-                    unit_amount: Math.round(parseFloat(data.totalPrice) * 100) // Convert to cents
-                },
-                quantity: 1
-            }
-        ];
-
-        const checkoutSession = await stripe.checkout.sessions.create({
-            line_items: lineItems,
-            mode: 'payment',
-            success_url: `${stripeDomain}/booking/success?appointmentId=${appointment.id}`,
-            cancel_url: `${stripeDomain}/booking/cancel?appointmentId=${appointment.id}`,
-            client_reference_id: appointment.id,
-            customer_email: data.customerEmail,
-            metadata: {
-                appointmentId: appointment.id,
-                serviceId: data.serviceId,
-                staffId: data.staffId,
-                customerId
-            }
+        const checkoutSession = await createCheckoutSession({
+            appointmentId: appointment.id,
+            serviceName: service.name,
+            servicePrice: service.price,
+            addons: service.addons,
+            customerEmail: customer.email,
+            appointmentDate: dateObj.toLocaleDateString(),
+            appointmentTime: `${dateObj.getHours()}:${String(dateObj.getMinutes()).padStart(2, '0')}`
         });
 
         return NextResponse.json({
             success: true,
-            appointmentId: appointment.id,
+            appointment: {
+                id: appointment.id,
+                service: service.name,
+                date: dateObj.toLocaleDateString(),
+                time: `${dateObj.getHours()}:${String(dateObj.getMinutes()).padStart(2, '0')}`,
+                customer: customer.name
+            },
             checkoutUrl: checkoutSession.url
         });
+
     } catch (error) {
-        console.error("Error creating booking:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        console.error('Error creating booking:', error);
+        return NextResponse.json(
+            { error: error.message || 'Failed to create booking' },
+            { status: 500 }
+        );
     }
 } 

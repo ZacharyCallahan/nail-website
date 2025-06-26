@@ -64,17 +64,23 @@ export default function AvailabilityManager() {
                 const data = await response.json();
 
                 // Format the schedules for display
-                const formattedSchedules = data.schedules.map(schedule => ({
-                    id: schedule.id,
-                    staffId: schedule.staffId,
-                    staffName: schedule.staff.user.name,
-                    type: schedule.specificDate ? "specific" : "weekly",
-                    days: schedule.dayOfWeek !== null ? [schedule.dayOfWeek] : [], // Put in array for compatibility with UI
-                    specificDate: schedule.specificDate ? new Date(schedule.specificDate) : null,
-                    startTime: formatTimeFromDate(schedule.startTime),
-                    endTime: formatTimeFromDate(schedule.endTime),
-                    isAvailable: schedule.isAvailable
-                }));
+                const formattedSchedules = data.schedules.map(schedule => {
+                    // Debug the time values
+                    console.log("Raw startTime:", schedule.startTime);
+                    console.log("Raw endTime:", schedule.endTime);
+
+                    return {
+                        id: schedule.id,
+                        staffId: schedule.staffId,
+                        staffName: schedule.staff.user.name,
+                        type: schedule.specificDate ? "specific" : "weekly",
+                        days: schedule.dayOfWeek !== null ? [schedule.dayOfWeek] : [], // Put in array for compatibility with UI
+                        specificDate: schedule.specificDate ? new Date(schedule.specificDate) : null,
+                        startTime: formatTimeFromDate(schedule.startTime),
+                        endTime: formatTimeFromDate(schedule.endTime),
+                        isAvailable: schedule.isAvailable
+                    };
+                });
 
                 // Format staff members for dropdown
                 const formattedStaff = data.staffMembers.map(staff => ({
@@ -98,10 +104,24 @@ export default function AvailabilityManager() {
 
     // Helper function to format time from date object
     function formatTimeFromDate(dateString) {
-        const date = new Date(dateString);
-        const hours = date.getHours().toString().padStart(2, '0');
-        const minutes = date.getMinutes().toString().padStart(2, '0');
-        return `${hours}:${minutes}`;
+        if (!dateString) return '';
+
+        try {
+            const date = new Date(dateString);
+
+            // Check if date is valid
+            if (isNaN(date.getTime())) {
+                console.error("Invalid date:", dateString);
+                return '';
+            }
+
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            return `${hours}:${minutes}`;
+        } catch (error) {
+            console.error("Error formatting time:", error);
+            return '';
+        }
     }
 
     const handleSlotTypeChange = (value) => {
@@ -243,6 +263,113 @@ export default function AvailabilityManager() {
         return specificSlots.some(slot =>
             slot.specificDate && isSameDay(slot.specificDate, date)
         );
+    };
+
+    // Format time for display
+    const formatTime = (timeString) => {
+        if (!timeString) return '';
+
+        try {
+            // Handle different time formats
+            let hours, minutes;
+
+            if (typeof timeString === 'string') {
+                if (timeString.includes('T')) {
+                    // ISO format date string
+                    const date = new Date(timeString);
+                    if (isNaN(date.getTime())) {
+                        console.error("Invalid date from ISO string:", timeString);
+                        return '';
+                    }
+                    hours = date.getHours();
+                    minutes = date.getMinutes();
+                } else if (timeString.includes(':')) {
+                    // HH:MM format
+                    [hours, minutes] = timeString.split(':').map(Number);
+                    if (isNaN(hours) || isNaN(minutes)) {
+                        console.error("Invalid time format:", timeString);
+                        return '';
+                    }
+                } else {
+                    console.error("Unknown time format:", timeString);
+                    return '';
+                }
+            } else if (timeString instanceof Date) {
+                if (isNaN(timeString.getTime())) {
+                    console.error("Invalid Date object:", timeString);
+                    return '';
+                }
+                hours = timeString.getHours();
+                minutes = timeString.getMinutes();
+            } else {
+                console.error("Unsupported time format:", timeString);
+                return '';
+            }
+
+            // Convert to 12-hour format with AM/PM
+            const period = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12 || 12; // Convert 0 to 12
+            minutes = minutes.toString().padStart(2, '0');
+
+            return `${hours}:${minutes} ${period}`;
+        } catch (error) {
+            console.error("Error formatting time:", error, "for input:", timeString);
+            return '';
+        }
+    };
+
+
+    const loadSchedules = async () => {
+        try {
+            setIsLoading(true);
+            if (!selectedStaff) return;
+
+            const response = await fetch(`/api/admin/availability?staffId=${selectedStaff}`);
+            const data = await response.json();
+
+            if (data.schedules) {
+                // Process schedules into weekly and specific
+                const weekly = data.schedules
+                    .filter(schedule => schedule.dayOfWeek !== null)
+                    .map(schedule => ({
+                        ...schedule,
+                        startTime: formatTimeForInput(schedule.startTime),
+                        endTime: formatTimeForInput(schedule.endTime)
+                    }));
+
+                const specific = data.schedules
+                    .filter(schedule => schedule.specificDate !== null)
+                    .map(schedule => ({
+                        ...schedule,
+                        startTime: formatTimeForInput(schedule.startTime),
+                        endTime: formatTimeForInput(schedule.endTime),
+                        specificDate: schedule.specificDate ? new Date(schedule.specificDate).toISOString().split('T')[0] : null
+                    }));
+
+                setAvailabilitySlots(weekly.concat(specific));
+            }
+        } catch (error) {
+            console.error("Failed to load schedules:", error);
+            setError("Failed to load schedules. Please try again.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const formatScheduleForDisplay = (schedule) => {
+        if (!schedule) return {};
+
+        // Format specific date if available
+        const dateDisplay = schedule.specificDate
+            ? new Date(schedule.specificDate).toLocaleDateString()
+            : getDayName(schedule.dayOfWeek);
+
+        // Format time display
+        return {
+            ...schedule,
+            displayDate: dateDisplay,
+            displayTime: `${formatTime(schedule.startTime)} - ${formatTime(schedule.endTime)}`
+        };
     };
 
     return (

@@ -14,13 +14,6 @@ import {
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue
-} from "@/app/components/ui/select";
-import {
     Table,
     TableBody,
     TableCell,
@@ -31,7 +24,6 @@ import {
 import { Textarea } from "@/app/components/ui/textarea";
 import { AlertCircle, Edit, Loader2, Plus, Trash2, User } from "lucide-react";
 import { useEffect, useState } from "react";
-import AdminSidebar from "./AdminSidebar";
 
 export default function StaffManager() {
     const [staff, setStaff] = useState([]);
@@ -116,18 +108,21 @@ export default function StaffManager() {
 
     // Open dialog for editing an existing staff member
     const handleEditStaff = (staffMember) => {
-        const serviceIds = staffMember.services.map(s => s.serviceId);
+        // Safely handle services that might be undefined
+        const serviceIds = staffMember.services && Array.isArray(staffMember.services)
+            ? staffMember.services.map(s => s?.serviceId).filter(Boolean)
+            : [];
 
         setCurrentStaff(staffMember);
         setFormData({
             id: staffMember.id,
-            name: staffMember.user.name,
-            email: staffMember.user.email,
-            phone: staffMember.user.phone || "",
+            name: staffMember.user?.name || "",
+            email: staffMember.user?.email || "",
+            phone: staffMember.user?.phone || "",
             password: "", // Don't populate password for security
             bio: staffMember.bio || "",
             services: serviceIds,
-            isActive: staffMember.isActive,
+            isActive: staffMember.isActive ?? true,
         });
         setIsDialogOpen(true);
     };
@@ -213,7 +208,6 @@ export default function StaffManager() {
 
     return (
         <div className="flex">
-            <AdminSidebar />
 
             <div className="flex-1 p-8 space-y-8">
                 <div>
@@ -266,62 +260,60 @@ export default function StaffManager() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {staff.map(staffMember => (
+                                {staff.map((staffMember) => (
                                     <TableRow key={staffMember.id}>
                                         <TableCell>
-                                            <div className="flex items-center gap-3">
-                                                <Avatar className="h-9 w-9 relative">
-                                                    {staffMember.imageUrl ? (
-                                                        <img src={staffMember.imageUrl} alt={staffMember.user.name} />
-                                                    ) : (
-                                                        <User className="h-5 w-5 absolute inset-1/2 -translate-x-1/2 -translate-y-1/2" />
+                                            <div className="flex items-center">
+                                                <Avatar className="h-8 w-8 mr-2">
+                                                    {staffMember.user?.image && (
+                                                        <img src={staffMember.user.image} alt={staffMember.user?.name || "Staff"} />
                                                     )}
                                                 </Avatar>
-                                                <div>
-                                                    <p className="font-medium">{staffMember.user.name}</p>
-                                                    <p className="text-xs text-muted-foreground">{staffMember.user.phone || "No phone"}</p>
+                                                <span>{staffMember.user?.name || "Unknown"}</span>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>{staffMember.user?.email || "No email"}</TableCell>
+                                        <TableCell>
+                                            {staffMember.services && Array.isArray(staffMember.services) && staffMember.services.length > 0 ? (
+                                                <div className="flex flex-wrap gap-1">
+                                                    {staffMember.services.slice(0, 3).map((serviceLink) => (
+                                                        <span key={serviceLink.serviceId} className="bg-muted text-xs px-2 py-1 rounded">
+                                                            {serviceLink.service?.name || "Unknown service"}
+                                                        </span>
+                                                    ))}
+                                                    {staffMember.services.length > 3 && (
+                                                        <span className="bg-muted text-xs px-2 py-1 rounded">
+                                                            +{staffMember.services.length - 3} more
+                                                        </span>
+                                                    )}
                                                 </div>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>{staffMember.user.email}</TableCell>
-                                        <TableCell>
-                                            <div className="flex flex-wrap gap-1">
-                                                {staffMember.services.slice(0, 2).map(service => (
-                                                    <span
-                                                        key={service.serviceId}
-                                                        className="inline-flex text-xs bg-primary/10 text-primary rounded-full px-2 py-0.5"
-                                                    >
-                                                        {service.service.name}
-                                                    </span>
-                                                ))}
-                                                {staffMember.services.length > 2 && (
-                                                    <span className="inline-flex text-xs bg-muted rounded-full px-2 py-0.5">
-                                                        +{staffMember.services.length - 2} more
-                                                    </span>
-                                                )}
-                                            </div>
+                                            ) : (
+                                                <span className="text-muted-foreground text-sm">No services</span>
+                                            )}
                                         </TableCell>
                                         <TableCell>
-                                            <span className={`inline-flex rounded-full px-2 py-1 text-xs ${staffMember.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                                {staffMember.isActive ? 'Active' : 'Inactive'}
+                                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${staffMember.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                                }`}>
+                                                {staffMember.isActive ? "Active" : "Inactive"}
                                             </span>
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            <div className="flex gap-2 justify-end">
+                                            <div className="flex justify-end gap-2">
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
                                                     onClick={() => handleEditStaff(staffMember)}
                                                 >
-                                                    <Edit className="h-4 w-4 mr-1" />
-                                                    Edit
+                                                    <Edit className="h-4 w-4" />
+                                                    <span className="sr-only">Edit</span>
                                                 </Button>
                                                 <Button
-                                                    variant="destructive"
+                                                    variant="outline"
                                                     size="sm"
                                                     onClick={() => handleDeleteClick(staffMember)}
                                                 >
                                                     <Trash2 className="h-4 w-4" />
+                                                    <span className="sr-only">Delete</span>
                                                 </Button>
                                             </div>
                                         </TableCell>

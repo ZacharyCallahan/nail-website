@@ -1,42 +1,74 @@
-import prisma from "@/lib/prisma";
-import { getDayOfWeek } from "@/lib/utils";
-import { NextResponse } from "next/server";
+import prisma from '@/lib/prisma';
+import { NextResponse } from 'next/server';
 
-// Function to check staff availability for a given date
+// Simple in-memory cache for availability data (in a production environment, use Redis)
+const availabilityCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 export async function GET(request) {
     try {
         const { searchParams } = new URL(request.url);
         const date = searchParams.get('date');
+        const staffId = searchParams.get('staffId');
         const serviceId = searchParams.get('serviceId');
 
-        // Basic validation
+        console.log("Availability API called with:", { date, staffId, serviceId });
+
         if (!date) {
-            return NextResponse.json({ error: "Date parameter is required" }, { status: 400 });
+            console.error("Missing required parameter: date");
+            return NextResponse.json({ error: 'Date is required' }, { status: 400 });
         }
 
         if (!serviceId) {
-            return NextResponse.json({ error: "Service ID parameter is required" }, { status: 400 });
+            console.error("Missing required parameter: serviceId");
+            return NextResponse.json({ error: 'Service ID is required' }, { status: 400 });
         }
 
-        // Parse the date
-        const selectedDate = new Date(date);
-        const dayOfWeek = getDayOfWeek(selectedDate);
+        // Generate a cache key based on parameters
+        const cacheKey = `availability-${date}-${serviceId}-${staffId || 'all'}`;
 
-        // Setting up date range for the selected date (full day)
+        // Check if we have cached data
+        if (availabilityCache.has(cacheKey)) {
+            const cachedData = availabilityCache.get(cacheKey);
+            if (cachedData.timestamp > Date.now() - CACHE_TTL) {
+                console.log("Returning cached availability data");
+                return NextResponse.json(cachedData.data);
+            } else {
+                // Remove expired cache entry
+                availabilityCache.delete(cacheKey);
+            }
+        }
+
+        const selectedDate = new Date(date);
+        if (isNaN(selectedDate.getTime())) {
+            return NextResponse.json({ error: 'Invalid date format' }, { status: 400 });
+        }
+
+        const dayOfWeek = selectedDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
+
+        console.log("Processing for date:", selectedDate, "day of week:", dayOfWeek);
+
+        // Format the date to match the date part only (for comparing with specificDate)
         const startOfDay = new Date(selectedDate);
         startOfDay.setHours(0, 0, 0, 0);
 
         const endOfDay = new Date(selectedDate);
         endOfDay.setHours(23, 59, 59, 999);
 
-        // Get service details
+        // Get service details with efficient query
         const service = await prisma.service.findUnique({
             where: { id: serviceId },
-            include: {
+            select: {
+                id: true,
+                name: true,
+                duration: true,
                 staffServices: {
-                    include: {
+                    select: {
+                        staffId: true,
                         staff: {
-                            include: {
+                            select: {
+                                id: true,
+                                userId: true,
                                 user: {
                                     select: {
                                         id: true,
@@ -52,25 +84,60 @@ export async function GET(request) {
         });
 
         if (!service) {
+            console.error("Service not found:", serviceId);
             return NextResponse.json({ error: "Service not found" }, { status: 404 });
         }
 
+        console.log("Service found:", service.name, "duration:", service.duration);
+
         // Get staff IDs who can perform this service
         const staffIds = service.staffServices.map(ss => ss.staffId);
+        console.log("Staff who can perform this service:", staffIds);
 
-        // Find availability for this specific date (overrides weekly schedule)
-        const specificDateSchedules = await prisma.schedule.findMany({
-            where: {
-                staffId: { in: staffIds },
-                specificDate: {
-                    gte: startOfDay,
-                    lte: endOfDay
+        if (staffIds.length === 0) {
+            console.error("No staff members can perform this service");
+            return NextResponse.json({ availability: [] });
+        }
+
+        // Build the query for schedules
+        const whereClause = {
+            staffId: { in: staffIds },
+            OR: [
+                // Regular weekly schedule
+                {
+                    dayOfWeek: dayOfWeek,
+                    specificDate: null,
+                    isAvailable: true
                 },
-                isAvailable: true
-            },
-            include: {
+                // Specific date availability that overrides weekly schedule
+                {
+                    specificDate: {
+                        gte: startOfDay,
+                        lte: endOfDay
+                    },
+                    isAvailable: true
+                }
+            ]
+        };
+
+        // Add staff filter if staffId is provided
+        if (staffId) {
+            whereClause.staffId = staffId;
+        }
+
+        // Get all schedules for this date (both weekly and specific)
+        // Optimize the query by selecting only needed fields
+        const schedules = await prisma.schedule.findMany({
+            where: whereClause,
+            select: {
+                id: true,
+                staffId: true,
+                dayOfWeek: true,
+                startTime: true,
+                endTime: true,
+                specificDate: true,
                 staff: {
-                    include: {
+                    select: {
                         user: {
                             select: {
                                 id: true,
@@ -83,38 +150,20 @@ export async function GET(request) {
             }
         });
 
-        // Staff IDs that have specific date schedules (to exclude them from weekly schedules)
-        const staffWithSpecificSchedule = specificDateSchedules.map(schedule => schedule.staffId);
+        console.log("Found schedules:", schedules.length);
 
-        // Find weekly recurring availability for the selected day of week 
-        // (only for staff that don't have a specific schedule for this date)
-        const weeklySchedules = await prisma.schedule.findMany({
-            where: {
-                staffId: {
-                    in: staffIds,
-                    notIn: staffWithSpecificSchedule // Exclude staff with specific date schedules
-                },
-                dayOfWeek: dayOfWeek,
-                specificDate: null, // Only get weekly recurring schedules
-                isAvailable: true
-            },
-            include: {
-                staff: {
-                    include: {
-                        user: {
-                            select: {
-                                id: true,
-                                name: true,
-                                image: true
-                            }
-                        }
-                    }
-                }
-            }
-        });
+        if (schedules.length === 0) {
+            console.log("No schedules found for the selected date and staff");
+            const emptyResult = { availability: [] };
 
-        // Combine both types of schedules
-        const allSchedules = [...specificDateSchedules, ...weeklySchedules];
+            // Cache empty result
+            availabilityCache.set(cacheKey, {
+                timestamp: Date.now(),
+                data: emptyResult
+            });
+
+            return NextResponse.json(emptyResult);
+        }
 
         // Get existing appointments for the selected date
         const existingAppointments = await prisma.appointment.findMany({
@@ -135,16 +184,25 @@ export async function GET(request) {
             }
         });
 
+        console.log("Existing appointments:", existingAppointments.length);
+
         // Generate available time slots
         const availabilityByStaff = {};
 
-        for (const schedule of allSchedules) {
+        for (const schedule of schedules) {
             const staffId = schedule.staffId;
             const staffName = schedule.staff.user.name;
-            const startHour = new Date(schedule.startTime).getHours();
-            const startMinute = new Date(schedule.startTime).getMinutes();
-            const endHour = new Date(schedule.endTime).getHours();
-            const endMinute = new Date(schedule.endTime).getMinutes();
+            const staffImage = schedule.staff.user.image;
+
+            // Format time values correctly
+            const startTime = new Date(schedule.startTime);
+            const endTime = new Date(schedule.endTime);
+
+            // Skip invalid times
+            if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+                console.error("Invalid time for staff", staffId, "schedule", schedule.id);
+                continue;
+            }
 
             // Filter appointments for this staff member
             const staffAppointments = existingAppointments
@@ -155,21 +213,20 @@ export async function GET(request) {
 
             // Set up starting time
             const slotTime = new Date(selectedDate);
-            slotTime.setHours(startHour, startMinute, 0, 0);
-
-            // End time to compare against
-            const endTime = new Date(selectedDate);
-            endTime.setHours(endHour, endMinute, 0, 0);
+            slotTime.setHours(startTime.getHours(), startTime.getMinutes(), 0, 0);
 
             // Service duration in milliseconds
             const serviceDuration = service.duration * 60 * 1000;
 
             // Generate slots until we reach the end time
-            while (slotTime < endTime) {
-                const slotEndTime = new Date(slotTime.getTime() + serviceDuration);
+            const slotEndTime = new Date(selectedDate);
+            slotEndTime.setHours(endTime.getHours(), endTime.getMinutes(), 0, 0);
+
+            while (slotTime < slotEndTime) {
+                const slotEnd = new Date(slotTime.getTime() + serviceDuration);
 
                 // Skip if this slot would end after the staff member's schedule
-                if (slotEndTime > endTime) {
+                if (slotEnd > slotEndTime) {
                     break;
                 }
 
@@ -181,15 +238,15 @@ export async function GET(request) {
                     // Check for overlap
                     return (
                         (slotTime >= appointmentStart && slotTime < appointmentEnd) || // slot start during appointment
-                        (slotEndTime > appointmentStart && slotEndTime <= appointmentEnd) || // slot end during appointment
-                        (slotTime <= appointmentStart && slotEndTime >= appointmentEnd) // slot contains appointment
+                        (slotEnd > appointmentStart && slotEnd <= appointmentEnd) || // slot end during appointment
+                        (slotTime <= appointmentStart && slotEnd >= appointmentEnd) // slot contains appointment
                     );
                 });
 
                 if (!isBooked) {
                     slots.push({
                         time: slotTime.toISOString(),
-                        endTime: slotEndTime.toISOString()
+                        endTime: slotEnd.toISOString()
                     });
                 }
 
@@ -199,21 +256,37 @@ export async function GET(request) {
 
             // Only add staff member if they have available slots
             if (slots.length > 0) {
-                availabilityByStaff[staffId] = {
-                    id: staffId,
-                    name: staffName,
-                    image: schedule.staff.user.image,
-                    slots
-                };
+                if (!availabilityByStaff[staffId]) {
+                    availabilityByStaff[staffId] = {
+                        id: staffId,
+                        name: staffName,
+                        image: staffImage,
+                        slots: []
+                    };
+                }
+
+                // Add slots to this staff member
+                availabilityByStaff[staffId].slots = [
+                    ...availabilityByStaff[staffId].slots,
+                    ...slots
+                ];
             }
         }
 
         // Convert to array for easier frontend handling
         const availability = Object.values(availabilityByStaff);
 
-        return NextResponse.json({ availability });
+        const result = { availability };
+
+        // Store in cache
+        availabilityCache.set(cacheKey, {
+            timestamp: Date.now(),
+            data: result
+        });
+
+        return NextResponse.json(result);
     } catch (error) {
-        console.error("Error checking availability:", error);
+        console.error('Error fetching availability:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 } 

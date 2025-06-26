@@ -7,8 +7,46 @@ export async function GET(request) {
         const { searchParams } = new URL(request.url);
         const categoryFilter = searchParams.get('category');
         const activeOnly = searchParams.get('activeOnly') !== 'false'; // Default to true
+        const serviceId = searchParams.get('serviceId');
 
-        console.log("Services API called with params:", { categoryFilter, activeOnly });
+        console.log("Services API called with params:", { categoryFilter, activeOnly, serviceId });
+
+        // If serviceId is provided, return only that specific service
+        if (serviceId) {
+            const service = await prisma.service.findUnique({
+                where: { id: serviceId },
+                include: {
+                    addOns: {
+                        where: {
+                            isActive: activeOnly ? true : undefined
+                        }
+                    },
+                    staffServices: {
+                        include: {
+                            staff: {
+                                include: {
+                                    user: {
+                                        select: {
+                                            id: true,
+                                            name: true,
+                                            image: true
+                                        }
+                                    },
+                                    schedules: true
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            if (!service) {
+                return NextResponse.json({ error: "Service not found" }, { status: 404 });
+            }
+
+            console.log(`API returning single service: ${service.name}`);
+            return NextResponse.json({ service });
+        }
 
         // Build the where clause based on filters
         const whereClause = {

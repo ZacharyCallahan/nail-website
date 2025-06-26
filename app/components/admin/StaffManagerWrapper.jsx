@@ -1,0 +1,32 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import StaffManager from "./StaffManager";
+
+export default function StaffManagerWrapper() {
+    const [error, setError] = useState(null);
+
+    // Error boundary
+    if (error) {
+        return (
+            <div className="p-6 bg-red-50 text-red-800 rounded-md">
+                <h2 className="text-lg font-bold mb-2">Error Loading Staff Manager</h2>
+                <p className="mb-4">{error.message || "An unexpected error occurred"}</p>
+                <button
+                    className="px-4 py-2 bg-red-600 text-white rounded-md"
+                    onClick={() => window.location.reload()}
+                >
+                    Reload Page
+                </button>
+            </div>
+        );
+    }
+
+    try {
+        return <StaffManager />;
+    } catch (err) {
+        console.error("Error in StaffManager:", err);
+        setError(err);
+        return null;
+    }
+} 

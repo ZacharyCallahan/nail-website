@@ -17,6 +17,11 @@ alwaysApply: true
 – Never add stubbing or fake data patterns to code that affects the dev or prod environments  
 – Never overwrite my .env file without first asking and confirming
 - Ensure that you correctly using server side and client side components correctly along with using server side actions for
+- when adding debugging information to the website make sure to only show that info on the dev/test environtment not the production
 
 
-all api endpoints. Avoid using /api for anything unless absolutley needed if server actions cant do it.
+
+
+
+
+all api endpoints. Avoid using /api for anything unless absolutley needed if server actions cant do 

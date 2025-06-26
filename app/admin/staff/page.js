@@ -1,6 +1,12 @@
 import { auth } from "@/app/api/auth/[...nextauth]/route";
-import StaffManagerComponent from "@/app/components/admin/StaffManager";
+import dynamic from "next/dynamic";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
+
+// Dynamically import the StaffManagerWrapper component
+const StaffManagerWrapper = dynamic(() => import("@/app/components/admin/StaffManagerWrapper"), {
+    loading: () => <div>Loading staff manager...</div>
+});
 
 export const metadata = {
     title: "Staff Management | Elegant Nails Admin",
@@ -16,5 +22,9 @@ export default async function StaffManagementPage() {
         redirect("/auth/signin?callbackUrl=/admin/staff");
     }
 
-    return <StaffManagerComponent />;
+    return (
+        <Suspense fallback={<div>Loading staff manager...</div>}>
+            <StaffManagerWrapper />
+        </Suspense>
+    );
 } 

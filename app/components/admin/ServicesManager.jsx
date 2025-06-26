@@ -1,8 +1,8 @@
 "use client";
 
-import { Avatar } from "@/app/components/ui/avatar";
+import AdminSidebar from "@/app/components/admin/AdminSidebar";
 import { Button } from "@/app/components/ui/button";
-import { Card, CardContent } from "@/app/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import {
     Dialog,
@@ -13,35 +13,19 @@ import {
 } from "@/app/components/ui/dialog";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue
-} from "@/app/components/ui/select";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow
-} from "@/app/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Textarea } from "@/app/components/ui/textarea";
 import { formatCurrency } from "@/lib/utils";
 import { AlertCircle, Edit, ImageIcon, Loader2, Plus, Scissors, Trash2 } from "lucide-react";
 import Image from "next/image";
+import { Card, CardContent } from "@/app/components/ui/card";
 import { useEffect, useState } from "react";
-import AdminSidebar from "./AdminSidebar";
 
 export default function ServicesManager() {
-    const [activeTab, setActiveTab] = useState("services");
     const [services, setServices] = useState([]);
     const [categories, setCategories] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [activeTab, setActiveTab] = useState("services");
 
     const [isServiceDialogOpen, setIsServiceDialogOpen] = useState(false);
     const [isAddOnDialogOpen, setIsAddOnDialogOpen] = useState(false);
@@ -373,7 +357,6 @@ export default function ServicesManager() {
 
     return (
         <div className="flex">
-            <AdminSidebar />
 
             <div className="flex-1 p-8 space-y-8">
                 <div>
@@ -704,7 +687,7 @@ export default function ServicesManager() {
                                         <Label htmlFor="isActive" className="cursor-pointer">Active</Label>
                                     </div>
                                     <p className="text-xs text-muted-foreground mt-1">
-                                        Inactive services won't be shown to customers
+                                        Inactive services won&apos;t be shown to customers
                                     </p>
                                 </div>
                             </div>

@@ -87,6 +87,20 @@ export async function POST(request) {
             return NextResponse.json({ error: "Specific date is required for date-based availability" }, { status: 400 });
         }
 
+        // Helper function to create time objects correctly
+        const createTimeObject = (timeString) => {
+            // For storing time values, we'll use the current date to ensure it's always current
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth();
+            const day = now.getDate();
+
+            const [hours, minutes] = timeString.split(':').map(Number);
+
+            // Create a date object with the current date but the specified time
+            return new Date(year, month, day, hours, minutes);
+        };
+
         let scheduleEntries = [];
 
         if (isWeekly) {
@@ -107,8 +121,8 @@ export async function POST(request) {
                         return prisma.schedule.update({
                             where: { id: existingSchedule.id },
                             data: {
-                                startTime: new Date(`2023-01-01T${data.startTime}:00`),
-                                endTime: new Date(`2023-01-01T${data.endTime}:00`),
+                                startTime: createTimeObject(data.startTime),
+                                endTime: createTimeObject(data.endTime),
                                 isAvailable: true,
                             }
                         });
@@ -120,8 +134,8 @@ export async function POST(request) {
                             staffId: data.staffId,
                             dayOfWeek: day,
                             specificDate: null,
-                            startTime: new Date(`2023-01-01T${data.startTime}:00`),
-                            endTime: new Date(`2023-01-01T${data.endTime}:00`),
+                            startTime: createTimeObject(data.startTime),
+                            endTime: createTimeObject(data.endTime),
                             isAvailable: true
                         }
                     });
@@ -142,13 +156,20 @@ export async function POST(request) {
                 }
             });
 
+            // For specific date entries, create time with the selected specific date
+            const createSpecificTimeObject = (timeString) => {
+                const specDate = new Date(data.specificDate);
+                const [hours, minutes] = timeString.split(':').map(Number);
+                return new Date(specDate.getFullYear(), specDate.getMonth(), specDate.getDate(), hours, minutes);
+            };
+
             if (existingSchedule) {
                 // Update the existing schedule
                 const updatedSchedule = await prisma.schedule.update({
                     where: { id: existingSchedule.id },
                     data: {
-                        startTime: new Date(`2023-01-01T${data.startTime}:00`),
-                        endTime: new Date(`2023-01-01T${data.endTime}:00`),
+                        startTime: createSpecificTimeObject(data.startTime),
+                        endTime: createSpecificTimeObject(data.endTime),
                         isAvailable: true
                     }
                 });
@@ -160,8 +181,8 @@ export async function POST(request) {
                         staffId: data.staffId,
                         dayOfWeek: null,
                         specificDate: new Date(data.specificDate),
-                        startTime: new Date(`2023-01-01T${data.startTime}:00`),
-                        endTime: new Date(`2023-01-01T${data.endTime}:00`),
+                        startTime: createSpecificTimeObject(data.startTime),
+                        endTime: createSpecificTimeObject(data.endTime),
                         isAvailable: true
                     }
                 });
@@ -208,12 +229,21 @@ export async function PATCH(request) {
             });
         }
 
+        // Helper function for time objects
+        const createTimeObject = (timeString) => {
+            if (!timeString) return undefined;
+
+            const now = new Date();
+            const [hours, minutes] = timeString.split(':').map(Number);
+            return new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes);
+        };
+
         // Otherwise update the schedule
         schedule = await prisma.schedule.update({
             where: { id: data.id },
             data: {
-                startTime: data.startTime ? new Date(`2023-01-01T${data.startTime}:00`) : undefined,
-                endTime: data.endTime ? new Date(`2023-01-01T${data.endTime}:00`) : undefined,
+                startTime: data.startTime ? createTimeObject(data.startTime) : undefined,
+                endTime: data.endTime ? createTimeObject(data.endTime) : undefined,
                 isAvailable: data.isAvailable !== undefined ? data.isAvailable : undefined,
                 dayOfWeek: data.dayOfWeek !== undefined ? data.dayOfWeek : undefined,
                 specificDate: data.specificDate ? new Date(data.specificDate) : undefined

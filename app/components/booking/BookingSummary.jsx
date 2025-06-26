@@ -83,6 +83,13 @@ export function BookingSummary({ bookingData, onSubmit }) {
     };
 
     if (!bookingData.service || !bookingData.staffMember || !bookingData.date || !bookingData.time) {
+        console.error("Missing required booking data:", {
+            service: bookingData.service,
+            staffMember: bookingData.staffMember,
+            date: bookingData.date,
+            time: bookingData.time
+        });
+
         return (
             <div className="text-center py-8">
                 <AlertCircle className="h-12 w-12 text-orange-500 mx-auto mb-2" />
@@ -90,6 +97,15 @@ export function BookingSummary({ bookingData, onSubmit }) {
                 <p className="text-muted-foreground mb-4">
                     Please go back and complete all required fields.
                 </p>
+                <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-md mb-4 text-left">
+                    <h4 className="font-medium text-yellow-800 mb-2">Missing Information:</h4>
+                    <ul className="list-disc pl-5 text-sm text-yellow-700">
+                        {!bookingData.service && <li>Service selection</li>}
+                        {!bookingData.staffMember && <li>Staff member selection</li>}
+                        {!bookingData.date && <li>Appointment date</li>}
+                        {!bookingData.time && <li>Appointment time</li>}
+                    </ul>
+                </div>
                 <Button onClick={() => window.history.back()}>
                     Go Back
                 </Button>

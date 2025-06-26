@@ -1,6 +1,12 @@
 import { auth } from "@/app/api/auth/[...nextauth]/route";
-import ServicesManager from "@/app/components/admin/ServicesManager";
+import dynamic from "next/dynamic";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
+
+// Dynamically import the ServicesManagerWrapper component
+const ServicesManagerWrapper = dynamic(() => import("@/app/components/admin/ServicesManagerWrapper"), {
+    loading: () => <div>Loading services manager...</div>
+});
 
 export const metadata = {
     title: "Services Management | Elegant Nails Admin",
@@ -16,5 +22,9 @@ export default async function ServicesPage() {
         redirect("/auth/signin?callbackUrl=/admin/services");
     }
 
-    return <ServicesManager />;
+    return (
+        <Suspense fallback={<div>Loading services manager...</div>}>
+            <ServicesManagerWrapper />
+        </Suspense>
+    );
 } 
