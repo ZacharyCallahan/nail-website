@@ -19,8 +19,11 @@ const steps = [
 export function BookingForm() {
     const searchParams = useSearchParams();
     const [currentStep, setCurrentStep] = useState(0);
+
+    // Break out service into its own state for more direct control
+    const [selectedService, setSelectedService] = useState(null);
+
     const [bookingData, setBookingData] = useState({
-        service: null,
         addOns: [],
         staffMember: null,
         date: null,
@@ -38,15 +41,12 @@ export function BookingForm() {
         if (serviceId) {
             // In a real app, you would fetch the service details from the API
             // For now, we'll just set a placeholder value
-            setBookingData(prev => ({
-                ...prev,
-                service: {
-                    id: serviceId,
-                    title: "Selected Service",
-                    price: "$0.00",
-                    duration: "0 min"
-                }
-            }));
+            setSelectedService({
+                id: serviceId,
+                title: "Selected Service",
+                price: "$0.00",
+                duration: "0 min"
+            });
         }
     }, [searchParams]);
 
@@ -65,36 +65,57 @@ export function BookingForm() {
     };
 
     const handleServiceSelection = (service) => {
-        setBookingData({ ...bookingData, service });
+        console.log("Service selection in BookingForm:", service);
+
+        if (!service || !service.id) {
+            console.error("Invalid service object received:", service);
+            return;
+        }
+
+        // Directly update the service state
+        setSelectedService(service);
+
+        // Store in local storage for persistence across page refreshes
+        try {
+            localStorage.setItem('selectedService', JSON.stringify(service));
+            console.log("Saved to localStorage:", service);
+        } catch (e) {
+            console.error('Error saving to localStorage:', e);
+        }
     };
 
     const handleAddOns = (addOns) => {
-        setBookingData({ ...bookingData, addOns });
+        setBookingData(prev => ({ ...prev, addOns }));
     };
 
     const handleStaffSelection = (staffMember) => {
-        setBookingData({ ...bookingData, staffMember });
+        setBookingData(prev => ({ ...prev, staffMember }));
     };
 
     const handleDateSelection = (date) => {
-        setBookingData({ ...bookingData, date });
+        setBookingData(prev => ({ ...prev, date }));
     };
 
     const handleTimeSelection = (time) => {
-        setBookingData({ ...bookingData, time });
+        setBookingData(prev => ({ ...prev, time }));
     };
 
     const handleCustomerDetails = (details) => {
-        setBookingData({ ...bookingData, ...details });
+        setBookingData(prev => ({ ...prev, ...details }));
     };
 
     const handleSubmit = async () => {
-        // In a real app, you would submit the booking data to the API
-        console.log("Submitting booking:", bookingData);
+        // Combine data for submission
+        const finalData = {
+            ...bookingData,
+            service: selectedService
+        };
+
+        console.log("Submitting booking:", finalData);
 
         // Placeholder for API call
         try {
-            // await createBooking(bookingData);
+            // await createBooking(finalData);
             alert("Thank you for your booking! We'll see you soon.");
             // Redirect to confirmation page or reset form
         } catch (error) {
@@ -106,7 +127,7 @@ export function BookingForm() {
     const isStepComplete = (stepIndex) => {
         switch (stepIndex) {
             case 0:
-                return !!bookingData.service;
+                return !!selectedService;
             case 1:
                 return !!bookingData.date && !!bookingData.time;
             case 2:
@@ -118,6 +139,13 @@ export function BookingForm() {
 
     const canProceed = isStepComplete(currentStep);
 
+    useEffect(() => {
+        // Log the current state for debugging
+        console.log("Current step:", currentStep);
+        console.log("Selected service:", selectedService);
+        console.log("Can proceed:", canProceed);
+    }, [currentStep, selectedService, canProceed]);
+
     return (
         <div className="p-6">
             {/* Progress Steps */}
@@ -127,8 +155,8 @@ export function BookingForm() {
                         <div key={step.id} className="flex items-center">
                             <div
                                 className={`flex items-center justify-center h-8 w-8 rounded-full ${index <= currentStep
-                                        ? "bg-primary text-primary-foreground"
-                                        : "bg-muted text-muted-foreground"
+                                    ? "bg-primary text-primary-foreground"
+                                    : "bg-muted text-muted-foreground"
                                     } ${index < currentStep && "bg-primary"}`}
                             >
                                 {index < currentStep ? (
@@ -155,7 +183,7 @@ export function BookingForm() {
             <div className="py-6">
                 {currentStep === 0 && (
                     <ServiceSelection
-                        selectedService={bookingData.service}
+                        selectedService={selectedService}
                         selectedAddOns={bookingData.addOns}
                         onServiceSelect={handleServiceSelection}
                         onAddOnsChange={handleAddOns}
@@ -188,7 +216,10 @@ export function BookingForm() {
 
                 {currentStep === 3 && (
                     <BookingSummary
-                        bookingData={bookingData}
+                        bookingData={{
+                            ...bookingData,
+                            service: selectedService
+                        }}
                         onSubmit={handleSubmit}
                     />
                 )}
@@ -206,21 +237,36 @@ export function BookingForm() {
                 </Button>
 
                 {currentStep < steps.length - 1 ? (
-                    <Button
-                        onClick={handleNext}
-                        disabled={!canProceed}
-                        className="flex items-center"
-                    >
-                        Next <ChevronRight className="ml-2 h-4 w-4" />
-                    </Button>
+                    <div className="flex flex-col items-end">
+                        {currentStep === 0 && !canProceed && (
+                            <p className="text-sm text-red-500 mb-2">
+                                Please select a service to continue
+                            </p>
+                        )}
+                        <Button
+                            onClick={handleNext}
+                            disabled={!canProceed}
+                            className="flex items-center"
+                            variant={canProceed ? "primary" : "outline"}
+                        >
+                            Next <ChevronRight className="ml-2 h-4 w-4" />
+                        </Button>
+                    </div>
                 ) : (
                     <Button
                         onClick={handleSubmit}
                         className="flex items-center"
+                        variant="primary"
                     >
                         Complete Booking <Check className="ml-2 h-4 w-4" />
                     </Button>
                 )}
+            </div>
+
+            {/* Debug info - remove in production */}
+            <div className="mt-6 p-2 text-xs bg-gray-100 rounded">
+                <p>Debug - Selected service: {selectedService ? selectedService.id : 'none'}</p>
+                <p>Can proceed: {canProceed ? 'Yes' : 'No'}</p>
             </div>
         </div>
     );

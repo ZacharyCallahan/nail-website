@@ -2,181 +2,212 @@
 
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/app/components/ui/card";
-import { formatCurrency } from "@/lib/utils";
-import { format } from "date-fns";
-import { Calendar, Check, Clock, CreditCard, User } from "lucide-react";
+import { formatCurrency, formatDate, formatTime } from "@/lib/utils";
+import { AlertCircle, Calendar, Check, CheckCircle, Clock, CreditCard, Loader2, User } from "lucide-react";
+import { useState } from "react";
 
 export function BookingSummary({ bookingData, onSubmit }) {
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState(null);
+    const [success, setSuccess] = useState(false);
+
     // Calculate total price
     const calculateTotal = () => {
         let total = 0;
 
         // Add service price
         if (bookingData.service) {
-            const servicePrice = parseFloat(bookingData.service.price.replace(/[^0-9.-]+/g, ""));
-            if (!isNaN(servicePrice)) {
-                total += servicePrice;
-            }
+            total += parseFloat(bookingData.service.price);
         }
 
-        // Add add-on prices
+        // Add add-ons prices
         if (bookingData.addOns && bookingData.addOns.length > 0) {
-            bookingData.addOns.forEach(addOn => {
-                const addOnPrice = parseFloat(addOn.price.replace(/[^0-9.-]+/g, ""));
-                if (!isNaN(addOnPrice)) {
-                    total += addOnPrice;
-                }
-            });
+            total += bookingData.addOns.reduce((sum, addon) =>
+                sum + parseFloat(addon.price), 0);
         }
 
         return total;
     };
 
-    const total = calculateTotal();
+    const totalPrice = calculateTotal();
+
+    const handleBookingSubmit = async () => {
+        try {
+            setIsSubmitting(true);
+            setError(null);
+
+            const payload = {
+                serviceId: bookingData.service.id,
+                staffId: bookingData.staffMember.id,
+                startTime: bookingData.time.time,
+                totalPrice: totalPrice,
+                addOns: bookingData.addOns ? bookingData.addOns.map(addon => addon.id) : [],
+                customerFirstName: bookingData.firstName,
+                customerLastName: bookingData.lastName,
+                customerEmail: bookingData.email,
+                customerPhone: bookingData.phone,
+                notes: bookingData.notes
+            };
+
+            const response = await fetch('/api/booking', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to create booking');
+            }
+
+            const data = await response.json();
+
+            setSuccess(true);
+
+            // Store booking reference for confirmation
+            localStorage.setItem('lastBookingId', data.appointmentId);
+
+            // Redirect to Stripe checkout
+            if (data.checkoutUrl) {
+                window.location.href = data.checkoutUrl;
+            }
+
+        } catch (err) {
+            console.error("Error submitting booking:", err);
+            setError(err.message || "Failed to complete your booking. Please try again.");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    if (!bookingData.service || !bookingData.staffMember || !bookingData.date || !bookingData.time) {
+        return (
+            <div className="text-center py-8">
+                <AlertCircle className="h-12 w-12 text-orange-500 mx-auto mb-2" />
+                <h3 className="text-lg font-medium mb-2">Incomplete Booking Information</h3>
+                <p className="text-muted-foreground mb-4">
+                    Please go back and complete all required fields.
+                </p>
+                <Button onClick={() => window.history.back()}>
+                    Go Back
+                </Button>
+            </div>
+        );
+    }
+
+    if (success) {
+        return (
+            <div className="text-center py-8">
+                <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-2" />
+                <h3 className="text-lg font-medium mb-2">Processing Your Booking</h3>
+                <p className="text-muted-foreground mb-2">
+                    Redirecting to secure payment...
+                </p>
+                <div className="mx-auto flex justify-center mt-4">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <div>
-            <h2 className="text-2xl font-semibold mb-6">Review Your Booking</h2>
-
-            <div className="grid md:grid-cols-2 gap-6">
-                <div>
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Booking Details</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            {/* Service */}
-                            {bookingData.service && (
-                                <div className="flex flex-col">
-                                    <h3 className="font-medium">Selected Service</h3>
-                                    <div className="flex justify-between items-center mt-1">
-                                        <div className="flex items-center">
-                                            <div>
-                                                <p>{bookingData.service.title}</p>
-                                                <p className="text-xs text-muted-foreground">{bookingData.service.duration}</p>
-                                            </div>
-                                        </div>
-                                        <span className="text-primary">{bookingData.service.price}</span>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Add-ons */}
-                            {bookingData.addOns && bookingData.addOns.length > 0 && (
-                                <div className="flex flex-col pt-4 border-t">
-                                    <h3 className="font-medium">Add-ons</h3>
-                                    <div className="space-y-2 mt-1">
-                                        {bookingData.addOns.map(addOn => (
-                                            <div key={addOn.id} className="flex justify-between items-center">
-                                                <div>
-                                                    <p>{addOn.title}</p>
-                                                    <p className="text-xs text-muted-foreground">{addOn.duration}</p>
-                                                </div>
-                                                <span className="text-primary">{addOn.price}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Date & Time */}
-                            {bookingData.date && bookingData.time && (
-                                <div className="flex flex-col pt-4 border-t">
-                                    <h3 className="font-medium">Appointment Time</h3>
-                                    <div className="flex items-center mt-1 gap-6">
-                                        <div className="flex items-center">
-                                            <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
-                                            <span>{format(bookingData.date, "EEEE, MMMM d, yyyy")}</span>
-                                        </div>
-                                        <div className="flex items-center">
-                                            <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
-                                            <span>{bookingData.time.time}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Staff */}
-                            {bookingData.staffMember && (
-                                <div className="flex items-center pt-4 border-t">
-                                    <User className="h-4 w-4 mr-2 text-muted-foreground" />
-                                    <div>
-                                        <h3 className="font-medium">{bookingData.staffMember.name}</h3>
-                                        <p className="text-xs text-muted-foreground">{bookingData.staffMember.role}</p>
-                                    </div>
-                                </div>
-                            )}
-                        </CardContent>
-                        <CardFooter className="flex justify-between bg-muted/50 border-t">
-                            <h3 className="font-semibold">Total</h3>
-                            <span className="font-semibold text-primary">{formatCurrency(total)}</span>
-                        </CardFooter>
-                    </Card>
+        <div className="space-y-8">
+            {error && (
+                <div className="bg-red-50 text-red-800 p-4 rounded-md flex items-start">
+                    <AlertCircle className="h-5 w-5 mr-2 mt-0.5" />
+                    <p>{error}</p>
                 </div>
+            )}
 
-                <div>
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Customer Information</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <h3 className="text-sm font-medium text-muted-foreground">First Name</h3>
-                                    <p>{bookingData.firstName}</p>
-                                </div>
-                                <div>
-                                    <h3 className="text-sm font-medium text-muted-foreground">Last Name</h3>
-                                    <p>{bookingData.lastName}</p>
-                                </div>
-                            </div>
+            <div>
+                <h3 className="text-lg font-medium mb-4">Booking Summary</h3>
 
-                            <div>
-                                <h3 className="text-sm font-medium text-muted-foreground">Email Address</h3>
-                                <p>{bookingData.email}</p>
-                            </div>
+                <div className="border rounded-md overflow-hidden">
+                    <div className="grid grid-cols-3 border-b">
+                        <div className="p-4 border-r">
+                            <div className="text-sm text-muted-foreground mb-1">Service</div>
+                            <div className="font-medium">{bookingData.service.name}</div>
+                            <div className="text-sm">{bookingData.service.duration} min</div>
+                        </div>
 
-                            <div>
-                                <h3 className="text-sm font-medium text-muted-foreground">Phone Number</h3>
-                                <p>{bookingData.phone}</p>
-                            </div>
+                        <div className="p-4 border-r">
+                            <div className="text-sm text-muted-foreground mb-1">Date & Time</div>
+                            <div className="font-medium">{formatDate(bookingData.date)}</div>
+                            <div className="text-sm">{formatTime(bookingData.time.time)}</div>
+                        </div>
 
-                            {bookingData.notes && (
-                                <div>
-                                    <h3 className="text-sm font-medium text-muted-foreground">Special Requests/Notes</h3>
-                                    <p className="text-sm">{bookingData.notes}</p>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    <div className="mt-6">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-base">Payment Information</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-sm text-muted-foreground mb-4">
-                                    A deposit of $10 will be charged to secure your booking. The remaining balance will be paid at the salon.
-                                </p>
-
-                                <div className="flex items-center gap-2 p-3 bg-muted rounded-md">
-                                    <CreditCard className="h-5 w-5 text-muted-foreground" />
-                                    <span className="text-sm">Payment will be handled securely through Stripe.</span>
-                                </div>
-                            </CardContent>
-                        </Card>
+                        <div className="p-4">
+                            <div className="text-sm text-muted-foreground mb-1">Staff</div>
+                            <div className="font-medium">{bookingData.staffMember.name}</div>
+                        </div>
                     </div>
 
-                    <div className="mt-6">
-                        <Button onClick={onSubmit} className="w-full" size="lg">
-                            <Check className="mr-2 h-4 w-4" /> Confirm Booking
-                        </Button>
-                        <p className="text-xs text-center mt-2 text-muted-foreground">
-                            By confirming, you agree to our booking <a href="/terms" className="underline">terms and conditions</a>
-                        </p>
+                    {/* Customer Details */}
+                    <div className="border-b p-4">
+                        <div className="text-sm text-muted-foreground mb-1">Customer</div>
+                        <div className="font-medium">
+                            {bookingData.firstName} {bookingData.lastName}
+                        </div>
+                        <div className="text-sm">{bookingData.email}</div>
+                        <div className="text-sm">{bookingData.phone}</div>
+                    </div>
+
+                    {/* Price Details */}
+                    <div className="p-4 space-y-2">
+                        <div className="flex justify-between">
+                            <span>{bookingData.service.name}</span>
+                            <span>{formatCurrency(bookingData.service.price)}</span>
+                        </div>
+
+                        {bookingData.addOns && bookingData.addOns.length > 0 && (
+                            bookingData.addOns.map(addon => (
+                                <div key={addon.id} className="flex justify-between text-sm">
+                                    <span>{addon.name}</span>
+                                    <span>{formatCurrency(addon.price)}</span>
+                                </div>
+                            ))
+                        )}
+
+                        <div className="border-t pt-2 mt-2 flex justify-between font-medium">
+                            <span>Total</span>
+                            <span>{formatCurrency(totalPrice)}</span>
+                        </div>
                     </div>
                 </div>
+
+                {bookingData.notes && (
+                    <div className="mt-4">
+                        <div className="text-sm text-muted-foreground mb-1">Notes</div>
+                        <div className="p-3 bg-muted/50 rounded-md">{bookingData.notes}</div>
+                    </div>
+                )}
+            </div>
+
+            <div className="pt-4 flex flex-col gap-4">
+                <p className="text-sm text-muted-foreground">
+                    By completing this booking, you agree to our
+                    <a href="#" className="text-primary hover:underline mx-1">Terms of Service</a>
+                    and
+                    <a href="#" className="text-primary hover:underline mx-1">Cancellation Policy</a>.
+                </p>
+
+                <Button
+                    onClick={handleBookingSubmit}
+                    className="w-full"
+                    size="lg"
+                    disabled={isSubmitting}
+                >
+                    {isSubmitting ? (
+                        <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Processing...
+                        </>
+                    ) : (
+                        "Complete Booking & Pay Now"
+                    )}
+                </Button>
             </div>
         </div>
     );

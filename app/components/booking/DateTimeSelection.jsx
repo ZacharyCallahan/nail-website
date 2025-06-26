@@ -1,176 +1,196 @@
 "use client";
 
+import { Avatar } from "@/app/components/ui/avatar";
 import { Button } from "@/app/components/ui/button";
 import { Calendar } from "@/app/components/ui/calendar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/app/components/ui/card";
-import { addDays, format, isSameDay } from "date-fns";
-import { Check, Clock } from "lucide-react";
-import { useState } from "react";
-
-// Sample data - in a real app, this would be fetched from an API
-const staff = [
-    {
-        id: "staff-1",
-        name: "Sarah Johnson",
-        role: "Senior Nail Technician",
-        bio: "Specializes in nail art and gel manicures.",
-        image: "/images/staff/sarah.jpg",
-        available: true,
-    },
-    {
-        id: "staff-2",
-        name: "Michael Lee",
-        role: "Nail Artist",
-        bio: "Expert in intricate nail designs and acrylic extensions.",
-        image: "/images/staff/michael.jpg",
-        available: true,
-    },
-    {
-        id: "staff-3",
-        name: "Jessica Smith",
-        role: "Nail Technician",
-        bio: "Specializes in pedicures and natural nail care.",
-        image: "/images/staff/jessica.jpg",
-        available: true,
-    },
-];
-
-// Sample time slots - in a real app, these would be generated based on staff availability
-const generateTimeSlots = () => {
-    const slots = [];
-    const startHour = 9; // 9 AM
-    const endHour = 19; // 7 PM
-    const interval = 30; // 30 minutes
-
-    for (let hour = startHour; hour < endHour; hour++) {
-        for (let minute = 0; minute < 60; minute += interval) {
-            const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-            slots.push({
-                id: `time-${time}`,
-                time: time,
-                available: Math.random() > 0.3, // Randomly mark some slots as unavailable
-            });
-        }
-    }
-    return slots;
-};
+import { Card, CardContent } from "@/app/components/ui/card";
+import { formatDate, formatTime } from "@/lib/utils";
+import { addDays, format, isBefore, isSameDay, startOfToday } from "date-fns";
+import { AlertCircle, CheckCircle, Clock, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
 
 export function DateTimeSelection({ selectedDate, selectedTime, selectedStaff, onDateSelect, onTimeSelect, onStaffSelect }) {
-    const [timeSlots, setTimeSlots] = useState(generateTimeSlots());
+    const [date, setDate] = useState(selectedDate || addDays(new Date(), 1));
+    const [staffAvailability, setStaffAvailability] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState(null);
 
-    // Minimum date is today, maximum date is 30 days from now
-    const minDate = new Date();
-    const maxDate = addDays(new Date(), 30);
+    // Get the selected service from the parent component
+    const getServiceIdFromUrl = () => {
+        if (typeof window === 'undefined') return null;
 
-    const handleDateSelect = (date) => {
-        onDateSelect(date);
-        // In a real app, this would trigger an API call to fetch available time slots for the selected date
-        setTimeSlots(generateTimeSlots());
-        onTimeSelect(null); // Reset time selection when date changes
+        const params = new URLSearchParams(window.location.search);
+        // Check URL for serviceId first
+        const serviceId = params.get('service');
+
+        // If not in URL, maybe it's in localStorage (set by previous step)
+        if (!serviceId) {
+            try {
+                const bookingData = JSON.parse(localStorage.getItem('bookingData') || '{}');
+                return bookingData.service?.id;
+            } catch (e) {
+                console.error('Error parsing booking data from localStorage:', e);
+                return null;
+            }
+        }
+
+        return serviceId;
     };
 
-    const handleTimeSelect = (timeSlot) => {
-        if (!timeSlot.available) return;
-        onTimeSelect(timeSlot);
+    // Fetch availability when date changes
+    useEffect(() => {
+        const serviceId = getServiceIdFromUrl();
+
+        if (!serviceId) {
+            setError("Service selection is required before checking availability");
+            return;
+        }
+
+        const fetchAvailability = async () => {
+            if (!date) return;
+
+            try {
+                setIsLoading(true);
+                console.log("Fetching availability for date:", date);
+
+                const response = await fetch(`/api/availability?date=${format(date, 'yyyy-MM-dd')}&serviceId=${serviceId}`);
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch availability');
+                }
+
+                const data = await response.json();
+                console.log("Availability data received:", data);
+                setStaffAvailability(data.availability || []);
+                setError(null);
+            } catch (err) {
+                console.error("Error fetching availability:", err);
+                setError("Failed to load availability. Please try again.");
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchAvailability();
+    }, [date]);
+
+    const handleDateChange = (newDate) => {
+        setDate(newDate);
+        onDateSelect(newDate);
+
+        // Reset time and staff selection when date changes
+        onTimeSelect(null);
+        onStaffSelect(null);
     };
 
-    const handleStaffSelect = (staffMember) => {
-        onStaffSelect(staffMember);
-        // In a real app, this would trigger an API call to fetch available time slots for the selected staff
-        setTimeSlots(generateTimeSlots());
-        onTimeSelect(null); // Reset time selection when staff changes
+    const handleStaffTimeSelection = (staffId, timeSlot) => {
+        const staff = staffAvailability.find(staff => staff.id === staffId);
+
+        if (staff) {
+            onStaffSelect(staff);
+            onTimeSelect(timeSlot);
+        }
+    };
+
+    // Calculate available dates (today + 30 days)
+    const today = startOfToday();
+    const maxDate = addDays(today, 30);
+
+    const isTimeSlotSelected = (staffId, timeSlot) => {
+        return selectedStaff?.id === staffId && selectedTime?.time === timeSlot.time;
     };
 
     return (
-        <div>
-            <h2 className="text-2xl font-semibold mb-6">Choose a Date and Time</h2>
+        <div className="space-y-8">
+            {error && (
+                <div className="bg-red-50 text-red-800 p-4 rounded-md flex items-start">
+                    <AlertCircle className="h-5 w-5 mr-2 mt-0.5" />
+                    <p>{error}</p>
+                </div>
+            )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Calendar */}
-                <div className="lg:col-span-2">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Select Date</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <Calendar
-                                mode="single"
-                                selected={selectedDate}
-                                onSelect={handleDateSelect}
-                                disabled={{ before: minDate, after: maxDate }}
-                                className="rounded-md border"
-                            />
-                        </CardContent>
-                    </Card>
+            <div className="space-y-2">
+                <h3 className="text-lg font-medium">Select a Date</h3>
+                <p className="text-sm text-muted-foreground">
+                    Choose a date for your appointment
+                </p>
+
+                <div className="border rounded-md p-4">
+                    <Calendar
+                        mode="single"
+                        selected={date}
+                        onSelect={handleDateChange}
+                        disabled={(date) => isBefore(date, today) || isBefore(maxDate, date)}
+                        className="mx-auto"
+                    />
                 </div>
 
-                {/* Staff Selection */}
-                <div>
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Choose Staff (Optional)</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="space-y-4">
-                                <p className="text-sm text-muted-foreground">
-                                    Select a staff member or leave unselected for any available technician.
-                                </p>
-                                {staff.map((staffMember) => (
-                                    <div
-                                        key={staffMember.id}
-                                        className={`p-3 border rounded-md cursor-pointer transition-all flex items-center gap-3 ${selectedStaff?.id === staffMember.id
-                                                ? "ring-2 ring-primary bg-primary/5"
-                                                : "hover:border-primary/50"
-                                            } ${!staffMember.available ? "opacity-50 cursor-not-allowed" : ""}`}
-                                        onClick={() => staffMember.available && handleStaffSelect(staffMember)}
-                                    >
-                                        <div className="w-10 h-10 bg-muted rounded-full flex-shrink-0"></div>
-                                        <div className="flex-1">
-                                            <h4 className="font-medium">{staffMember.name}</h4>
-                                            <p className="text-xs text-muted-foreground">{staffMember.role}</p>
-                                        </div>
-                                        {selectedStaff?.id === staffMember.id && (
-                                            <div className="h-6 w-6 rounded-full bg-primary flex items-center justify-center">
-                                                <Check className="h-4 w-4 text-white" />
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        </CardContent>
-                    </Card>
+                <div className="text-sm text-muted-foreground text-center mt-2">
+                    Appointments available for the next 30 days
                 </div>
             </div>
 
-            {/* Time Slots */}
-            {selectedDate && (
-                <div className="mt-8">
-                    <h3 className="text-xl font-semibold mb-4">
-                        Available Times for {format(selectedDate, "EEEE, MMMM d, yyyy")}
-                    </h3>
+            <div className="space-y-4">
+                <h3 className="text-lg font-medium">Select a Time & Staff Member</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                    Choose a staff member and available time slot for {date ? format(date, "EEEE, MMMM d") : "your appointment"}
+                </p>
 
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                        {timeSlots.map((slot) => (
-                            <Button
-                                key={slot.id}
-                                variant={selectedTime?.id === slot.id ? "default" : "outline"}
-                                className={`${!slot.available ? "opacity-50 cursor-not-allowed" : ""}`}
-                                disabled={!slot.available}
-                                onClick={() => handleTimeSelect(slot)}
-                            >
-                                <Clock className="mr-2 h-4 w-4" />
-                                {slot.time}
-                            </Button>
+                {isLoading ? (
+                    <div className="text-center py-8">
+                        <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+                        <p className="text-muted-foreground">Loading availability...</p>
+                    </div>
+                ) : staffAvailability.length === 0 ? (
+                    <div className="text-center py-8 border rounded-md bg-muted/50">
+                        <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
+                        <h4 className="font-medium mb-1">No Availability</h4>
+                        <p className="text-muted-foreground">
+                            No available time slots found for {format(date, "MMMM d")}.
+                            <br />Please select a different date.
+                        </p>
+                    </div>
+                ) : (
+                    <div className="space-y-6">
+                        {staffAvailability.map((staff) => (
+                            <Card key={staff.id} className="overflow-hidden">
+                                <CardContent className="p-0">
+                                    <div className="flex items-center gap-4 p-4 border-b">
+                                        <Avatar className="h-10 w-10">
+                                            {staff.image && (
+                                                <img src={staff.image} alt={staff.name} />
+                                            )}
+                                        </Avatar>
+                                        <div>
+                                            <h4 className="font-medium">{staff.name}</h4>
+                                            <p className="text-sm text-muted-foreground">
+                                                {staff.slots.length} available slot{staff.slots.length !== 1 ? 's' : ''}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-3 gap-2 p-4">
+                                        {staff.slots.map((slot) => (
+                                            <Button
+                                                key={slot.time}
+                                                variant={isTimeSlotSelected(staff.id, slot) ? "default" : "outline"}
+                                                size="sm"
+                                                className="relative"
+                                                onClick={() => handleStaffTimeSelection(staff.id, slot)}
+                                            >
+                                                {formatTime(slot.time)}
+                                                {isTimeSlotSelected(staff.id, slot) && (
+                                                    <CheckCircle className="h-3 w-3 absolute top-1 right-1" />
+                                                )}
+                                            </Button>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
                         ))}
                     </div>
-
-                    {timeSlots.length === 0 && (
-                        <p className="text-center text-muted-foreground">
-                            No available time slots for the selected date.
-                        </p>
-                    )}
-                </div>
-            )}
+                )}
+            </div>
         </div>
     );
 } 

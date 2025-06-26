@@ -1,12 +1,11 @@
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { auth } from '@/app/api/auth/[...nextauth]/route';
 import prisma from '@/lib/prisma';
 import { constructLineItem, createCheckoutSession } from '@/lib/stripe';
-import { getServerSession } from 'next-auth/next';
 
 export async function POST(request) {
     try {
         // Verify that the user is authenticated
-        const session = await getServerSession(authOptions);
+        const session = await auth();
 
         if (!session) {
             return Response.json({ error: 'You must be logged in to book an appointment' }, { status: 401 });

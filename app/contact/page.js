@@ -5,7 +5,7 @@ import { Clock, Facebook, Instagram, Mail, MapPin, Phone, Twitter } from "lucide
 
 export const metadata = {
     title: "Contact Us | Elegant Nails",
-    description: "Contact Elegant Nails for appointments, questions, or feedback. We'd love to hear from you!",
+    description: "Contact Elegant Nails for appointments, questions, or feedback. We&apos;d love to hear from you!",
 };
 
 export default function ContactPage() {
@@ -16,7 +16,7 @@ export default function ContactPage() {
                 <div className="container max-w-screen-xl mx-auto px-4 text-center">
                     <h1 className="text-4xl md:text-5xl font-bold mb-6">Contact Us</h1>
                     <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                        Have questions or want to book an appointment? Reach out to us and we'll get back to you as soon as possible.
+                        Have questions or want to book an appointment? Reach out to us and we&apos;ll get back to you as soon as possible.
                     </p>
                 </div>
             </section>
@@ -120,7 +120,7 @@ export default function ContactPage() {
                                 <CardHeader>
                                     <CardTitle>Send Us a Message</CardTitle>
                                     <CardDescription>
-                                        Fill out the form below and we'll get back to you as soon as possible.
+                                        Fill out the form below and we&apos;ll get back to you as soon as possible.
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent>
@@ -171,7 +171,7 @@ export default function ContactPage() {
                             </CardHeader>
                             <CardContent>
                                 <p className="text-muted-foreground">
-                                    We require at least 24 hours' notice for cancellations or rescheduling. Late cancellations or no-shows may be subject to a cancellation fee.
+                                    We require at least 24 hours&apos; notice for cancellations or rescheduling. Late cancellations or no-shows may be subject to a cancellation fee.
                                 </p>
                             </CardContent>
                         </Card>

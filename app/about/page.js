@@ -61,7 +61,7 @@ export default function AboutPage() {
                                     Our founder, Sarah Johnson, brought her 15 years of experience and passion for nail artistry to create a space where clients can relax, unwind, and leave feeling beautiful and confident.
                                 </p>
                                 <p>
-                                    Over the years, we've expanded our services and our team, but our commitment to quality and customer satisfaction remains unchanged. We use only premium products, maintain the highest standards of cleanliness, and stay at the forefront of nail care trends and techniques.
+                                    Over the years, we&apos;ve expanded our services and our team, but our commitment to quality and customer satisfaction remains unchanged. We use only premium products, maintain the highest standards of cleanliness, and stay at the forefront of nail care trends and techniques.
                                 </p>
                             </div>
                         </div>

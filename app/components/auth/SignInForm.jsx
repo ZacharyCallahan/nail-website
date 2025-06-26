@@ -37,18 +37,33 @@ export default function SignInForm() {
                 redirect: false,
             });
 
-            if (result?.error) {
-                setError("Invalid email or password");
-                setIsLoading(false);
+            if (!result) {
+                console.error("Authentication failed: No result returned");
+                router.push(`/auth/error?error=Default&message=${encodeURIComponent("No result returned from authentication")}`);
+                return;
+            }
+
+            if (result.error) {
+                console.error("Authentication error:", result.error);
+
+                // Redirect to error page with the error
+                router.push(`/auth/error?error=${result.error}`);
                 return;
             }
 
             // Redirect to dashboard or home page
-            router.push("/");
-            router.refresh();
+            if (result.ok) {
+                router.push("/");
+                router.refresh();
+            } else {
+                // This should not happen, but just in case
+                console.error("Authentication failed: Result not OK");
+                router.push(`/auth/error?error=Default&message=${encodeURIComponent("Authentication failed for unknown reason")}`);
+            }
         } catch (error) {
             console.error("Sign in error:", error);
             setError("An error occurred. Please try again.");
+            router.push(`/auth/error?error=Default&message=${encodeURIComponent(error.message || "Unknown error")}`);
         } finally {
             setIsLoading(false);
         }

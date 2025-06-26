@@ -1,4 +1,4 @@
-import { auth, authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { auth } from "@/app/api/auth/[...nextauth]/route";
 import AdminDashboard from "@/app/components/admin/AdminDashboard";
 import { redirect } from "next/navigation";
 

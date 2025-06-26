@@ -1,112 +1,87 @@
 "use client";
 
 import { Button } from "@/app/components/ui/button";
-import { cn } from "@/lib/utils";
-import {
-    Calendar,
-    CreditCard,
-    LayoutDashboard,
-    LogOut,
-    MessageSquare,
-    Scissors,
-    Settings,
-    Users
-} from "lucide-react";
-import { signOut } from "next-auth/react";
+import { Briefcase, Calendar, Clock, LayoutDashboard, Settings, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+
+const menuItems = [
+    {
+        title: "Dashboard",
+        icon: <LayoutDashboard className="mr-2 h-5 w-5" />,
+        path: "/admin"
+    },
+    {
+        title: "Appointments",
+        icon: <Calendar className="mr-2 h-5 w-5" />,
+        path: "/admin/appointments"
+    },
+    {
+        title: "Availability",
+        icon: <Clock className="mr-2 h-5 w-5" />,
+        path: "/admin/availability"
+    },
+    {
+        title: "Services",
+        icon: <Briefcase className="mr-2 h-5 w-5" />,
+        path: "/admin/services"
+    },
+    {
+        title: "Staff",
+        icon: <Users className="mr-2 h-5 w-5" />,
+        path: "/admin/staff"
+    },
+    {
+        title: "Settings",
+        icon: <Settings className="mr-2 h-5 w-5" />,
+        path: "/admin/settings"
+    }
+];
 
 export default function AdminSidebar() {
     const pathname = usePathname();
 
-    const navItems = [
-        {
-            name: "Dashboard",
-            href: "/admin",
-            icon: <LayoutDashboard className="mr-2 h-5 w-5" />,
-        },
-        {
-            name: "Appointments",
-            href: "/admin/appointments",
-            icon: <Calendar className="mr-2 h-5 w-5" />,
-        },
-        {
-            name: "Staff",
-            href: "/admin/staff",
-            icon: <Users className="mr-2 h-5 w-5" />,
-        },
-        {
-            name: "Services",
-            href: "/admin/services",
-            icon: <Scissors className="mr-2 h-5 w-5" />,
-        },
-        {
-            name: "Payments",
-            href: "/admin/payments",
-            icon: <CreditCard className="mr-2 h-5 w-5" />,
-        },
-        {
-            name: "Messages",
-            href: "/admin/messages",
-            icon: <MessageSquare className="mr-2 h-5 w-5" />,
-        },
-        {
-            name: "Settings",
-            href: "/admin/settings",
-            icon: <Settings className="mr-2 h-5 w-5" />,
-        },
-    ];
-
     return (
-        <div className="min-h-screen w-64 border-r bg-card flex flex-col">
-            <div className="p-6">
-                <h1 className="text-2xl font-bold text-primary">Elegant Nails</h1>
-                <p className="text-sm text-muted-foreground mt-1">Admin Portal</p>
-            </div>
+        <div className="w-64 h-screen border-r bg-muted/30 p-6 hidden md:block">
+            <div className="flex flex-col justify-between h-full">
+                <div className="space-y-6">
+                    <h2 className="text-lg font-bold mb-6">Elegant Nails Admin</h2>
 
-            <nav className="flex-1 px-4 pb-4">
-                <ul className="space-y-1">
-                    {navItems.map((item) => {
-                        const isActive = pathname === item.href;
-
-                        return (
-                            <li key={item.name}>
-                                <Link
-                                    href={item.href}
-                                    className={cn(
-                                        "flex items-center py-2 px-3 text-sm rounded-md",
-                                        isActive
-                                            ? "bg-primary text-primary-foreground"
-                                            : "hover:bg-accent hover:text-accent-foreground"
-                                    )}
-                                >
+                    <nav className="space-y-2">
+                        {menuItems.map((item) => (
+                            <Button
+                                key={item.path}
+                                variant={pathname === item.path ? "default" : "ghost"}
+                                className={`w-full justify-start ${pathname === item.path ? "" : "hover:bg-muted"}`}
+                                asChild
+                            >
+                                <Link href={item.path}>
                                     {item.icon}
-                                    {item.name}
+                                    {item.title}
                                 </Link>
-                            </li>
-                        );
-                    })}
-                </ul>
-            </nav>
-
-            {/* Profile and Logout */}
-            <div className="p-4 border-t">
-                <div className="flex items-center mb-4">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 mr-3"></div>
-                    <div>
-                        <p className="font-medium text-sm">Admin User</p>
-                        <p className="text-xs text-muted-foreground">admin@example.com</p>
-                    </div>
+                            </Button>
+                        ))}
+                    </nav>
                 </div>
 
-                <Button
-                    variant="outline"
-                    className="w-full justify-start text-muted-foreground"
-                    onClick={() => signOut({ callbackUrl: "/" })}
-                >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Logout
-                </Button>
+                <div className="pt-6 border-t">
+                    <div className="rounded-lg bg-primary/10 p-4">
+                        <h3 className="font-medium mb-1 text-sm">Need Help?</h3>
+                        <p className="text-xs text-muted-foreground mb-3">
+                            Check our admin documentation for guides and support.
+                        </p>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full"
+                            asChild
+                        >
+                            <Link href="/admin/help">
+                                View Documentation
+                            </Link>
+                        </Button>
+                    </div>
+                </div>
             </div>
         </div>
     );

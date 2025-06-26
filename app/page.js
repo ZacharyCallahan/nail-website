@@ -184,7 +184,7 @@ export default function Home() {
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">What Our Clients Say</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Don't just take our word for it - hear from our satisfied customers.
+              Don&apos;t just take our word for it - hear from our satisfied customers.
             </p>
           </div>
 
@@ -205,7 +205,7 @@ export default function Home() {
                       </svg>
                     ))}
                   </div>
-                  <CardDescription className="text-foreground italic">"{testimonial.comment}"</CardDescription>
+                  <CardDescription className="text-foreground italic">&quot;{testimonial.comment}&quot;</CardDescription>
                 </CardHeader>
                 <CardFooter>
                   <p className="font-medium">- {testimonial.name}</p>

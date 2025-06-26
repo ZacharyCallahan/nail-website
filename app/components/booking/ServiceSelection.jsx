@@ -1,189 +1,260 @@
 "use client";
 
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/app/components/ui/card";
+import { Avatar } from "@/app/components/ui/avatar";
+import { Button } from "@/app/components/ui/button";
+import { Card, CardContent } from "@/app/components/ui/card";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { Label } from "@/app/components/ui/label";
-import { Check } from "lucide-react";
-import { useState } from "react";
-
-// Sample data - in a real app, this would come from an API or database
-const services = [
-    {
-        id: "classic-manicure",
-        title: "Classic Manicure",
-        description: "A traditional manicure with nail shaping, cuticle care, hand massage, and polish.",
-        price: "$25",
-        duration: "30 min",
-    },
-    {
-        id: "gel-manicure",
-        title: "Gel Manicure",
-        description: "Long-lasting gel polish application with nail shaping and cuticle care.",
-        price: "$40",
-        duration: "45 min",
-    },
-    {
-        id: "classic-pedicure",
-        title: "Classic Pedicure",
-        description: "Relaxing foot soak, nail shaping, callus removal, foot massage, and polish.",
-        price: "$40",
-        duration: "45 min",
-    },
-    {
-        id: "deluxe-pedicure",
-        title: "Deluxe Pedicure",
-        description: "Premium pedicure with exfoliating scrub, hydrating mask, extended massage, and polish.",
-        price: "$55",
-        duration: "60 min",
-    },
-    {
-        id: "acrylic-full-set",
-        title: "Acrylic Full Set",
-        description: "Full set of acrylic nails with your choice of length and shape.",
-        price: "$70",
-        duration: "75 min",
-    },
-    {
-        id: "gel-extensions",
-        title: "Gel Extensions",
-        description: "Full set of gel nail extensions for a natural look and feel.",
-        price: "$80",
-        duration: "90 min",
-    },
-];
-
-const addOns = [
-    {
-        id: "french-tips",
-        title: "French Tips",
-        description: "Classic white tips for a timeless look.",
-        price: "$10",
-        duration: "10 min",
-    },
-    {
-        id: "nail-art-simple",
-        title: "Simple Nail Art",
-        description: "Basic design on one or more nails.",
-        price: "$15",
-        duration: "15 min",
-    },
-    {
-        id: "nail-strengthener",
-        title: "Nail Strengthener",
-        description: "Treatment to help strengthen brittle or weak nails.",
-        price: "$8",
-        duration: "5 min",
-    },
-    {
-        id: "paraffin-treatment",
-        title: "Paraffin Treatment",
-        description: "Deeply moisturizing warm wax treatment for hands or feet.",
-        price: "$15",
-        duration: "15 min",
-    },
-];
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue
+} from "@/app/components/ui/select";
+import { formatCurrency } from "@/lib/utils";
+import { AlertCircle, CheckCircle, Loader2 } from "lucide-react";
+import Image from "next/image";
+import { useCallback, useEffect, useState } from "react";
 
 export function ServiceSelection({ selectedService, selectedAddOns, onServiceSelect, onAddOnsChange }) {
-    const [searchQuery, setSearchQuery] = useState("");
+    const [category, setCategory] = useState("");
+    const [categories, setCategories] = useState([]);
+    const [services, setServices] = useState([]);
+    const [filteredServices, setFilteredServices] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [isSelecting, setIsSelecting] = useState(false);
 
-    const filteredServices = services.filter(service =>
-        service.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        service.description.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    // Fetch services from the API
+    useEffect(() => {
+        const fetchServices = async () => {
+            try {
+                setIsLoading(true);
+                const response = await fetch('/api/services');
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch services');
+                }
+
+                const data = await response.json();
+                console.log("Services fetched:", data.services.length);
+
+                if (data.services.length === 0) {
+                    setError("No services available. Please try again later.");
+                } else {
+                    setServices(data.services);
+                    setCategories(data.categories);
+                    setFilteredServices(data.services);
+                    setError(null);
+                }
+            } catch (err) {
+                console.error("Error fetching services:", err);
+                setError("Failed to load services. Please try again.");
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchServices();
+    }, []);
+
+    // Filter services when category changes
+    useEffect(() => {
+        if (category === "all-categories") {
+            setFilteredServices(services);
+        } else if (category) {
+            const filtered = services.filter(service => service.category === category);
+            setFilteredServices(filtered);
+
+            if (filtered.length === 0) {
+                setError(`No services found in the "${category}" category.`);
+            } else {
+                setError(null);
+            }
+        } else {
+            setFilteredServices(services);
+        }
+    }, [category, services]);
+
+    const handleCategoryChange = (value) => {
+        setCategory(value);
+    };
 
     const handleServiceClick = (service) => {
-        onServiceSelect(service);
+        console.log("Service clicked:", service);
+        setIsSelecting(true);
+
+        try {
+            console.log("About to call onServiceSelect with:", service);
+            onServiceSelect(service);
+            // Reset any previously selected add-ons when a new service is selected
+            onAddOnsChange([]);
+
+            // Show success message when service is selected
+            setError(null);
+        } catch (err) {
+            console.error("Error selecting service:", err);
+            setError("There was a problem selecting this service. Please try again.");
+        } finally {
+            setIsSelecting(false);
+        }
     };
 
     const handleAddOnToggle = (addOn) => {
-        const currentAddOns = [...(selectedAddOns || [])];
-        const index = currentAddOns.findIndex(item => item.id === addOn.id);
+        if (!selectedAddOns) return;
 
-        if (index >= 0) {
-            // Remove if already selected
-            currentAddOns.splice(index, 1);
+        if (selectedAddOns.some(selected => selected.id === addOn.id)) {
+            onAddOnsChange(selectedAddOns.filter(selected => selected.id !== addOn.id));
         } else {
-            // Add if not selected
-            currentAddOns.push(addOn);
+            onAddOnsChange([...selectedAddOns, addOn]);
         }
-
-        onAddOnsChange(currentAddOns);
-    };
-
-    const isAddOnSelected = (id) => {
-        return (selectedAddOns || []).some(addOn => addOn.id === id);
     };
 
     return (
-        <div>
-            <h2 className="text-2xl font-semibold mb-6">Select a Service</h2>
+        <div className="space-y-6">
+            {error && (
+                <div className="bg-red-50 text-red-800 p-4 rounded-md flex items-start">
+                    <AlertCircle className="h-5 w-5 mr-2 mt-0.5" />
+                    <p>{error}</p>
+                </div>
+            )}
 
-            {/* Search input */}
-            <div className="mb-6">
-                <input
-                    type="text"
-                    placeholder="Search services..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full p-2 border rounded-md"
-                />
+            {selectedService && !error && (
+                <div className="bg-green-50 text-green-800 p-4 rounded-md flex items-start">
+                    <CheckCircle className="h-5 w-5 mr-2 mt-0.5" />
+                    <p>You've selected <strong>{selectedService.name}</strong>. You can continue to the next step or choose a different service.</p>
+                </div>
+            )}
+
+            {/* Category filter */}
+            <div>
+                <Label htmlFor="category" className="mb-2 block">Filter by Category</Label>
+                <Select value={category} onValueChange={handleCategoryChange}>
+                    <SelectTrigger id="category" className="w-full max-w-xs">
+                        <SelectValue placeholder="All Categories" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all-categories">All Categories</SelectItem>
+                        {categories.map((cat) => (
+                            <SelectItem key={cat} value={cat}>
+                                {cat}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
             </div>
 
-            {/* Service cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                {filteredServices.map((service) => (
-                    <Card
-                        key={service.id}
-                        className={`cursor-pointer transition-all ${selectedService?.id === service.id
-                                ? "ring-2 ring-primary"
-                                : "hover:border-primary/50"
-                            }`}
-                        onClick={() => handleServiceClick(service)}
-                    >
-                        <CardHeader className="pb-2">
-                            <div className="flex justify-between items-center">
-                                <CardTitle className="text-lg">{service.title}</CardTitle>
-                                {selectedService?.id === service.id && (
-                                    <div className="h-6 w-6 rounded-full bg-primary flex items-center justify-center text-white">
-                                        <Check className="h-4 w-4" />
+            {/* Services list */}
+            <div className="space-y-4">
+                <h3 className="text-lg font-medium">Select a Service</h3>
+
+                {isLoading ? (
+                    <div className="text-center py-8">
+                        <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+                        <p className="text-muted-foreground">Loading services...</p>
+                    </div>
+                ) : filteredServices.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                        No services found in this category.
+                    </div>
+                ) : (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        {filteredServices.map((service) => (
+                            <Card
+                                key={service.id}
+                                className={`transition-all border-2 ${selectedService && selectedService.id === service.id
+                                    ? 'border-primary bg-primary/5'
+                                    : 'border-muted hover:border-muted-foreground/50'
+                                    }`}
+                            >
+                                <CardContent className="p-4 flex items-start gap-4 relative">
+                                    {selectedService && selectedService.id === service.id && (
+                                        <div className="absolute -top-2 -right-2 h-8 w-8 bg-primary rounded-full flex items-center justify-center text-primary-foreground">
+                                            <CheckCircle className="h-5 w-5" />
+                                        </div>
+                                    )}
+                                    <div className="relative w-20 h-20 rounded-md overflow-hidden flex-shrink-0">
+                                        {service.imageUrl ? (
+                                            <Image
+                                                src={service.imageUrl}
+                                                alt={service.name}
+                                                fill
+                                                className="object-cover"
+                                            />
+                                        ) : (
+                                            <div className="w-full h-full bg-muted flex items-center justify-center">
+                                                <p className="text-xs text-muted-foreground">No image</p>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                            </div>
-                            <div className="flex justify-between text-sm">
-                                <span className="font-medium text-primary">{service.price}</span>
-                                <span className="text-muted-foreground">{service.duration}</span>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <p className="text-sm">{service.description}</p>
-                        </CardContent>
-                    </Card>
-                ))}
+
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-start">
+                                            <h4 className="font-medium">{service.name}</h4>
+                                        </div>
+
+                                        <p className="text-sm text-muted-foreground mb-2">{service.description}</p>
+
+                                        <div className="flex items-center justify-between mt-2">
+                                            <span className="text-sm">
+                                                {service.duration} min
+                                            </span>
+                                            <span className="font-medium">
+                                                {formatCurrency(service.price)}
+                                            </span>
+                                        </div>
+
+                                        {/* Simple direct button approach */}
+                                        <div className="mt-4 flex gap-3">
+                                            <button
+                                                type="button"
+                                                className={`w-full rounded-md py-2 px-4 text-center ${selectedService && selectedService.id === service.id
+                                                    ? 'bg-primary text-white font-medium shadow'
+                                                    : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
+                                                    }`}
+                                                onClick={() => {
+                                                    console.log("Direct button click for:", service);
+                                                    onServiceSelect(service);
+                                                }}
+                                            >
+                                                {selectedService && selectedService.id === service.id
+                                                    ? "✓ Selected"
+                                                    : "Select This Service"}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                )}
             </div>
 
-            {selectedService && (
-                <div>
-                    <h3 className="text-xl font-semibold mb-4">Add-ons for {selectedService.title}</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {addOns.map((addOn) => (
+            {/* Add-ons section (shown only when a service is selected) */}
+            {selectedService && selectedService.addOns && selectedService.addOns.length > 0 && (
+                <div className="mt-8 border-t pt-6 space-y-4">
+                    <h3 className="text-lg font-medium">Add-Ons (Optional)</h3>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        {selectedService.addOns.map((addOn) => (
                             <div
                                 key={addOn.id}
-                                className="flex items-start space-x-3 p-4 border rounded-md hover:bg-muted/50 transition-colors"
+                                className="flex items-start space-x-3 border rounded-md p-3"
                             >
                                 <Checkbox
                                     id={`addon-${addOn.id}`}
-                                    checked={isAddOnSelected(addOn.id)}
+                                    checked={selectedAddOns?.some(selected => selected.id === addOn.id)}
                                     onCheckedChange={() => handleAddOnToggle(addOn)}
                                 />
                                 <div className="flex-1">
-                                    <div className="flex justify-between">
-                                        <Label htmlFor={`addon-${addOn.id}`} className="font-medium">
-                                            {addOn.title}
-                                        </Label>
-                                        <span className="text-primary font-medium">{addOn.price}</span>
-                                    </div>
-                                    <p className="text-sm text-muted-foreground mt-1">{addOn.description}</p>
-                                    <p className="text-xs text-muted-foreground mt-1">{addOn.duration}</p>
+                                    <label
+                                        htmlFor={`addon-${addOn.id}`}
+                                        className="font-medium text-sm cursor-pointer flex justify-between"
+                                    >
+                                        <span>{addOn.name}</span>
+                                        <span>{formatCurrency(addOn.price)}</span>
+                                    </label>
+                                    <p className="text-xs text-muted-foreground mt-1">{addOn.description}</p>
                                 </div>
                             </div>
                         ))}

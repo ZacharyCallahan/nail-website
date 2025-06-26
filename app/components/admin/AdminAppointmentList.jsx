@@ -25,75 +25,82 @@ import {
     TableHeader,
     TableRow
 } from "@/app/components/ui/table";
-import { Check, MoreHorizontal, X } from "lucide-react";
-import { useState } from "react";
+import { formatDate, formatTime } from "@/lib/utils";
+import { Check, Loader2, MoreHorizontal, X } from "lucide-react";
+import { useEffect, useState } from "react";
 
 export default function AdminAppointmentList() {
     const [filter, setFilter] = useState("all");
+    const [appointments, setAppointments] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [isUpdating, setIsUpdating] = useState(false);
 
-    // Mock data - in a real app this would come from the database
-    const mockAppointments = [
-        {
-            id: "ap1",
-            customer: "Jane Smith",
-            service: "Gel Manicure",
-            date: "2023-05-15",
-            time: "10:00 AM",
-            duration: "45 min",
-            staff: "Sarah Johnson",
-            status: "CONFIRMED",
-            price: "$45.00"
-        },
-        {
-            id: "ap2",
-            customer: "Michael Brown",
-            service: "Full Set Acrylic",
-            date: "2023-05-15",
-            time: "11:30 AM",
-            duration: "60 min",
-            staff: "Jessica Lee",
-            status: "PENDING",
-            price: "$75.00"
-        },
-        {
-            id: "ap3",
-            customer: "Emily Davis",
-            service: "Pedicure Deluxe",
-            date: "2023-05-15",
-            time: "1:15 PM",
-            duration: "60 min",
-            staff: "Michael Chen",
-            status: "CONFIRMED",
-            price: "$65.00"
-        },
-        {
-            id: "ap4",
-            customer: "Robert Wilson",
-            service: "Nail Art Add-on",
-            date: "2023-05-15",
-            time: "2:30 PM",
-            duration: "30 min",
-            staff: "Sarah Johnson",
-            status: "CANCELED",
-            price: "$25.00"
-        },
-        {
-            id: "ap5",
-            customer: "Linda Johnson",
-            service: "Spa Mani-Pedi",
-            date: "2023-05-16",
-            time: "9:00 AM",
-            duration: "90 min",
-            staff: "Jessica Lee",
-            status: "PENDING",
-            price: "$95.00"
+    // Fetch appointments data
+    useEffect(() => {
+        const fetchAppointments = async () => {
+            try {
+                setIsLoading(true);
+                const response = await fetch('/api/admin/appointments');
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch appointments');
+                }
+
+                const data = await response.json();
+                setAppointments(data.appointments);
+                setError(null);
+            } catch (err) {
+                console.error("Error fetching appointments:", err);
+                setError("Failed to load appointments. Please try again.");
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchAppointments();
+    }, []);
+
+    // Function to update appointment status
+    const updateAppointmentStatus = async (id, status) => {
+        try {
+            setIsUpdating(true);
+            const response = await fetch('/api/admin/appointments', {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    id,
+                    status,
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to update appointment status');
+            }
+
+            // Update the appointment in the local state
+            setAppointments(prev => prev.map(appointment => {
+                if (appointment.id === id) {
+                    return { ...appointment, status };
+                }
+                return appointment;
+            }));
+
+        } catch (error) {
+            console.error("Error updating appointment status:", error);
+            setError("Failed to update appointment status. Please try again.");
+        } finally {
+            setIsUpdating(false);
         }
-    ];
+    };
 
     // Filter appointments based on status
     const filteredAppointments = filter === 'all'
-        ? mockAppointments
-        : mockAppointments.filter(appointment => appointment.status === filter);
+        ? appointments
+        : appointments.filter(appointment => appointment.status === filter);
 
     const getStatusBadgeStyles = (status) => {
         switch (status) {
@@ -112,6 +119,12 @@ export default function AdminAppointmentList() {
 
     return (
         <div className="space-y-4">
+            {error && (
+                <div className="bg-red-50 text-red-800 p-3 rounded-md mb-4">
+                    {error}
+                </div>
+            )}
+
             <div className="flex items-center justify-between">
                 <div>
                     <Select value={filter} onValueChange={setFilter}>
@@ -146,7 +159,14 @@ export default function AdminAppointmentList() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {filteredAppointments.length === 0 ? (
+                        {isLoading ? (
+                            <TableRow>
+                                <TableCell colSpan={7} className="h-24 text-center">
+                                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+                                    <p className="text-muted-foreground">Loading appointments...</p>
+                                </TableCell>
+                            </TableRow>
+                        ) : filteredAppointments.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                                     No appointments found.
@@ -155,22 +175,30 @@ export default function AdminAppointmentList() {
                         ) : (
                             filteredAppointments.map((appointment) => (
                                 <TableRow key={appointment.id}>
-                                    <TableCell className="font-medium">{appointment.customer}</TableCell>
-                                    <TableCell>{appointment.service}</TableCell>
-                                    <TableCell>
-                                        {appointment.date} <span className="block text-muted-foreground text-xs">{appointment.time} ({appointment.duration})</span>
+                                    <TableCell className="font-medium">
+                                        {appointment.customer.name}
+                                        <span className="block text-xs text-muted-foreground">
+                                            {appointment.customer.email}
+                                        </span>
                                     </TableCell>
-                                    <TableCell>{appointment.staff}</TableCell>
+                                    <TableCell>{appointment.service.name}</TableCell>
+                                    <TableCell>
+                                        {formatDate(appointment.startTime, 'PPP')}
+                                        <span className="block text-muted-foreground text-xs">
+                                            {formatTime(appointment.startTime)} ({appointment.service.duration} min)
+                                        </span>
+                                    </TableCell>
+                                    <TableCell>{appointment.staff.user.name}</TableCell>
                                     <TableCell>
                                         <Badge variant="outline" className={getStatusBadgeStyles(appointment.status)}>
                                             {appointment.status.charAt(0) + appointment.status.slice(1).toLowerCase()}
                                         </Badge>
                                     </TableCell>
-                                    <TableCell>{appointment.price}</TableCell>
+                                    <TableCell>${appointment.totalPrice.toFixed(2)}</TableCell>
                                     <TableCell>
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon">
+                                                <Button variant="ghost" size="icon" disabled={isUpdating}>
                                                     <MoreHorizontal className="h-4 w-4" />
                                                     <span className="sr-only">Actions</span>
                                                 </Button>
@@ -183,14 +211,29 @@ export default function AdminAppointmentList() {
                                                 <DropdownMenuItem>Send reminder</DropdownMenuItem>
 
                                                 {appointment.status === "PENDING" && (
-                                                    <DropdownMenuItem className="text-green-600">
+                                                    <DropdownMenuItem
+                                                        className="text-green-600"
+                                                        onClick={() => updateAppointmentStatus(appointment.id, "CONFIRMED")}
+                                                    >
                                                         <Check className="mr-2 h-4 w-4" /> Confirm
                                                     </DropdownMenuItem>
                                                 )}
 
                                                 {(appointment.status === "PENDING" || appointment.status === "CONFIRMED") && (
-                                                    <DropdownMenuItem className="text-red-600">
+                                                    <DropdownMenuItem
+                                                        className="text-red-600"
+                                                        onClick={() => updateAppointmentStatus(appointment.id, "CANCELED")}
+                                                    >
                                                         <X className="mr-2 h-4 w-4" /> Cancel
+                                                    </DropdownMenuItem>
+                                                )}
+
+                                                {appointment.status === "CONFIRMED" && (
+                                                    <DropdownMenuItem
+                                                        className="text-blue-600"
+                                                        onClick={() => updateAppointmentStatus(appointment.id, "COMPLETED")}
+                                                    >
+                                                        <Check className="mr-2 h-4 w-4" /> Mark as Completed
                                                     </DropdownMenuItem>
                                                 )}
                                             </DropdownMenuContent>

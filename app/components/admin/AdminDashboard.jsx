@@ -12,6 +12,7 @@ import {
     Users,
     X
 } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import AdminAppointmentList from "./AdminAppointmentList";
 import AvailabilityManager from "./AvailabilityManager";
@@ -119,21 +120,45 @@ export default function AdminDashboard() {
 
             {/* Action Buttons */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Button variant="outline" className="h-24 flex flex-col items-center justify-center space-y-2">
-                    <Users className="h-6 w-6" />
-                    <span>Manage Staff</span>
+                <Button
+                    variant="outline"
+                    className="h-24 flex flex-col items-center justify-center space-y-2"
+                    asChild
+                >
+                    <Link href="/admin/staff">
+                        <Users className="h-6 w-6" />
+                        <span>Manage Staff</span>
+                    </Link>
                 </Button>
-                <Button variant="outline" className="h-24 flex flex-col items-center justify-center space-y-2">
-                    <CalendarIcon className="h-6 w-6" />
-                    <span>Add Holiday</span>
+                <Button
+                    variant="outline"
+                    className="h-24 flex flex-col items-center justify-center space-y-2"
+                    asChild
+                >
+                    <Link href="/admin/availability">
+                        <CalendarIcon className="h-6 w-6" />
+                        <span>Manage Availability</span>
+                    </Link>
                 </Button>
-                <Button variant="outline" className="h-24 flex flex-col items-center justify-center space-y-2">
-                    <Check className="h-6 w-6" />
-                    <span>Add Service</span>
+                <Button
+                    variant="outline"
+                    className="h-24 flex flex-col items-center justify-center space-y-2"
+                    asChild
+                >
+                    <Link href="/admin/services">
+                        <Check className="h-6 w-6" />
+                        <span>Manage Services</span>
+                    </Link>
                 </Button>
-                <Button variant="outline" className="h-24 flex flex-col items-center justify-center space-y-2">
-                    <X className="h-6 w-6" />
-                    <span>Block Time</span>
+                <Button
+                    variant="outline"
+                    className="h-24 flex flex-col items-center justify-center space-y-2"
+                    asChild
+                >
+                    <Link href="/admin/appointments">
+                        <X className="h-6 w-6" />
+                        <span>View Appointments</span>
+                    </Link>
                 </Button>
             </div>
         </div>

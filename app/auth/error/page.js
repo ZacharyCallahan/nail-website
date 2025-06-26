@@ -9,18 +9,23 @@ export const metadata = {
     description: "An error occurred during authentication.",
 };
 
-export default function AuthErrorPage({ searchParams }) {
-    const { error } = searchParams;
+export default async function AuthErrorPage({ searchParams }) {
+    // Use await to access searchParams properties
+    const params = await searchParams;
+    const errorType = await params?.error || "Default";
+    const errorMsg = await params?.message || null;
 
     // Map error codes to user-friendly messages
     const errorMessages = {
         Configuration: "There is a problem with the server configuration. Please contact support.",
         AccessDenied: "You do not have permission to access this resource.",
         Verification: "The verification link is invalid or has expired.",
+        CredentialsSignin: "Login failed. Please check your email and password and try again.",
         Default: "An unexpected authentication error occurred.",
     };
 
-    const errorMessage = errorMessages[error] || errorMessages.Default;
+    const errorMessage = errorMessages[errorType] || errorMessages.Default;
+    const detailedMessage = errorMsg ? decodeURIComponent(errorMsg) : null;
 
     return (
         <MainLayout>
@@ -34,6 +39,20 @@ export default function AuthErrorPage({ searchParams }) {
                         <p className="text-muted-foreground mb-6">
                             {errorMessage}
                         </p>
+
+                        {detailedMessage && (
+                            <div className="bg-red-50 p-4 rounded-md mb-6 text-left">
+                                <p className="text-sm font-medium text-red-800 mb-1">Error details:</p>
+                                <p className="text-sm text-red-700">{detailedMessage}</p>
+                            </div>
+                        )}
+
+                        {errorType && errorType !== "Default" && (
+                            <div className="bg-gray-50 p-4 rounded-md mb-6 text-left">
+                                <p className="text-sm font-medium text-gray-800 mb-1">Error code:</p>
+                                <p className="text-sm text-gray-700">{errorType}</p>
+                            </div>
+                        )}
 
                         <div className="space-y-4">
                             <p>
